@@ -1,4 +1,5 @@
 __*
+.prettierignore
 
 # Binaries for programs and plugins
 *.exe

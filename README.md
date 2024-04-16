@@ -35,3 +35,15 @@ make undeploy  # remove controller from the cluster
 ```bash
 make manifests  # generate the CRDs
 ```
+
+## Development
+
+### Updating API
+
+After updating any api/**/*_types.go files run:
+
+```bash
+make manifests  # generate the manifests
+make  # regenerate the code
+make install  # install the CRDs to the cluster
+```

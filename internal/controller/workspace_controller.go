@@ -19,13 +19,15 @@ package controller
 import (
 	"context"
 
+	"github.com/Telespazio-UK/workspace-operator.git/api/v1alpha1"
+	coretelespazioukiov1alpha1 "github.com/Telespazio-UK/workspace-operator.git/api/v1alpha1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-
-	"github.com/Telespazio-UK/workspace-operator.git/api/v1alpha1"
-	coretelespazioukiov1alpha1 "github.com/Telespazio-UK/workspace-operator.git/api/v1alpha1"
 )
 
 // WorkspaceReconciler reconciles a Workspace object
@@ -34,9 +36,9 @@ type WorkspaceReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-//+kubebuilder:rbac:groups=core.telespazio-uk.io.core.telespazio-uk.io,resources=workspaces,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=core.telespazio-uk.io.core.telespazio-uk.io,resources=workspaces/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=core.telespazio-uk.io.core.telespazio-uk.io,resources=workspaces/finalizers,verbs=update
+// +kubebuilder:rbac:groups=core.telespazio-uk.io.core.telespazio-uk.io,resources=workspaces,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core.telespazio-uk.io.core.telespazio-uk.io,resources=workspaces/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=core.telespazio-uk.io.core.telespazio-uk.io,resources=workspaces/finalizers,verbs=update
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -48,17 +50,34 @@ type WorkspaceReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.17.2/pkg/reconcile
 func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	l := log.FromContext(ctx)
+	log := log.FromContext(ctx)
 
-	workspace := &v1alpha1.Workspace{}
-	err := r.Get(ctx, req.NamespacedName, workspace)
-	if err != nil {
-		// Error reading the workspace - requeue the request.
-		l.Error(err, "Error reading the workspace")
+	var workspace v1alpha1.Workspace
+	if err := r.Get(ctx, req.NamespacedName, &workspace); err != nil {
+		log.Error(err, "unable to fetch Workspace")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	l.Info("Reconciling workspace", "workspace", workspace)
+	// Check if workspace namespace exists
+	var namespace corev1.Namespace
+	if err := r.Get(ctx, client.ObjectKey{Name: workspace.Name}, &namespace); err != nil {
+		if errors.IsNotFound(err) {
+			log.Info("Namespace for workspace does not exist", "namespace", workspace.Name)
+
+			// Create namespace
+			namespace = corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{Name: workspace.Name},
+				Spec:       corev1.NamespaceSpec{},
+			}
+			err = client.IgnoreAlreadyExists(r.Create(ctx, &namespace))
+			if err == nil {
+				log.Info("Namespace created", "workspace.Status", workspace.Status)
+			}
+		} else {
+			log.Error(err, "Failed to get namespace", "namespace", workspace.Name)
+			return ctrl.Result{}, err
+		}
+	}
 
 	return ctrl.Result{}, nil
 }
