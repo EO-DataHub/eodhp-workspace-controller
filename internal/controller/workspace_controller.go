@@ -24,6 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
+	"github.com/Telespazio-UK/workspace-operator.git/api/v1alpha1"
 	coretelespazioukiov1alpha1 "github.com/Telespazio-UK/workspace-operator.git/api/v1alpha1"
 )
 
@@ -47,9 +48,17 @@ type WorkspaceReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.17.2/pkg/reconcile
 func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = log.FromContext(ctx)
+	l := log.FromContext(ctx)
 
-	// TODO(user): your logic here
+	workspace := &v1alpha1.Workspace{}
+	err := r.Get(ctx, req.NamespacedName, workspace)
+	if err != nil {
+		// Error reading the workspace - requeue the request.
+		l.Error(err, "Error reading the workspace")
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	l.Info("Reconciling workspace", "workspace", workspace)
 
 	return ctrl.Result{}, nil
 }
