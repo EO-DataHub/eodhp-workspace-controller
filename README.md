@@ -47,3 +47,10 @@ make manifests  # generate the manifests
 make  # regenerate the code
 make install  # install the CRDs to the cluster
 ```
+
+## Manually Export Manifests
+
+```bash
+kustomize build config/crd > crds.yaml  # crds
+kustomize build config/default > manifests.yaml  # all other manifests
+```
