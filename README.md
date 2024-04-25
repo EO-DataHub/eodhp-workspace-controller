@@ -54,3 +54,56 @@ make install  # install the CRDs to the cluster
 kustomize build config/crd > crds.yaml  # crds
 kustomize build config/default > manifests.yaml  # all other manifests
 ```
+
+## Extending the Workspace Controller
+
+This module is designed for reuse and extensibility. To extend the workspace controller for your own project do the following:
+
+1. Scaffold your own Kubebuilder project `kubebuilder init --domain my.domain --owner "My Org"`
+2. Modify the `cmd/main.go` file as follows:
+
+```golang
+package main
+
+import (
+  ...
+
+  // add these imports
+  corev1alpha1 "github.com/UKEODHP/workspace-controller/api/v1alpha1"
+	"github.com/UKEODHP/workspace-controller/controller"
+)
+
+...
+
+func init() {
+  ...
+
+  // add this scheme
+  utilruntime.Must(corev1alpha1.AddToScheme(scheme))
+}
+
+func main() {
+  ...
+
+  mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+    ...
+  }
+  if err != nil {
+		setupLog.Error(err, "unable to start manager")
+		os.Exit(1)
+	}
+
+  // add the controller here
+  if err = (&controller.WorkspaceReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Workspace")
+		os.Exit(1)
+	}
+	//+kubebuilder:scaffold:builder
+  ...
+}
+```
+
+You can now extend the controller functionality as you require. You may wish to wrap the `controller.Reconcile` method to add functionality to the workspace reconcile loop.
