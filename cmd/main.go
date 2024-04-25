@@ -35,7 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	corev1alpha1 "github.com/UKEODHP/workspace-controller/api/v1alpha1"
-	"github.com/UKEODHP/workspace-controller/internal/controller"
+	"github.com/UKEODHP/workspace-controller/controller"
 	//+kubebuilder:scaffold:imports
 )
 
