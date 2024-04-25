@@ -28,14 +28,15 @@ type WorkspaceSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Foo is an example field of Workspace. Edit workspace_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
 }
 
 // WorkspaceStatus defines the observed state of Workspace
 type WorkspaceStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+
+	// The name of the namespace for the workspace
+	Namespace string `json:"namespace,omitempty"`
 }
 
 //+kubebuilder:object:root=true

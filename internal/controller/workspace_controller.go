@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -52,13 +53,42 @@ type WorkspaceReconciler struct {
 func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
-	var workspace corev1alpha1.Workspace
-	if err := r.Get(ctx, req.NamespacedName, &workspace); err != nil {
-		log.Error(err, "unable to fetch Workspace")
+	workspace := &corev1alpha1.Workspace{}
+	if err := r.Get(ctx, req.NamespacedName, workspace); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	// Check if workspace namespace exists
+	// Create finalizer
+	finalizer := "core.telespazio-uk.io/workspace-finalizer"
+	// Is object being deleted?
+	if workspace.ObjectMeta.DeletionTimestamp.IsZero() {
+		// The object is not being deleted, so we add our finalizer if it is not already present
+		if !controllerutil.ContainsFinalizer(workspace, finalizer) {
+			controllerutil.AddFinalizer(workspace, finalizer)
+			if err := r.Update(ctx, workspace); err != nil {
+				log.Info("Added finalizer to workspace", "workspace.Status", workspace.Status)
+				// Continue reconciliation
+			}
+		}
+	} else {
+		// The object is being deleted
+		if controllerutil.ContainsFinalizer(workspace, finalizer) {
+			// Our finalizer is present, so lets handle any external dependency
+			if err := r.deleteChildResources(ctx, workspace); err != nil {
+				// If we fail to delete the external resource, we need to requeue the item
+				return ctrl.Result{}, err
+			}
+			// Remove our finalizer from the list and update it.
+			controllerutil.RemoveFinalizer(workspace, finalizer)
+			if err := r.Update(ctx, workspace); err != nil {
+				return ctrl.Result{}, err
+			}
+		}
+		// Stop reconciliation as the item is being deleted.
+		return ctrl.Result{}, nil
+	}
+
+	// Create workspace namespace if it does not already exist.
 	var namespace corev1.Namespace
 	if err := r.Get(ctx, client.ObjectKey{Name: workspace.Name}, &namespace); err != nil {
 		if errors.IsNotFound(err) {
@@ -79,6 +109,10 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 	}
 
+	workspace.Status.Namespace = namespace.Name
+	if err := r.Status().Update(ctx, workspace); err != nil {
+		log.Error(err, "Failed to update workspace status", "workspace.Status", workspace.Status)
+	}
 	return ctrl.Result{}, nil
 }
 
@@ -87,4 +121,22 @@ func (r *WorkspaceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&corev1alpha1.Workspace{}).
 		Complete(r)
+}
+
+// Delete any child resources of the object.
+func (r *WorkspaceReconciler) deleteChildResources(ctx context.Context, workspace *corev1alpha1.Workspace) error {
+	log := log.FromContext(ctx)
+
+	// Delete namespace
+	var namespace corev1.Namespace
+	if err := client.IgnoreNotFound(r.Get(ctx, client.ObjectKey{Name: workspace.Status.Namespace}, &namespace)); err == nil {
+		if err := r.Delete(ctx, &namespace); err != nil {
+			log.Error(err, "Failed to delete namespace", "namespace", workspace.Status.Namespace)
+			return err
+		} else {
+			log.Info("Namespace deleted", "namespace", workspace.Status.Namespace)
+		}
+	}
+
+	return nil
 }
