@@ -4,17 +4,17 @@
 # More info: https://book.kubebuilder.io/reference/project-config.html
 domain: telespazio-uk.io
 layout:
-- go.kubebuilder.io/v4
+  - go.kubebuilder.io/v4
 projectName: workspace-operator
-repo: github.com/UKEODHP/workspace-controller.git
+repo: github.com/UKEODHP/workspace-controller
 resources:
-- api:
-    crdVersion: v1
-    namespaced: true
-  controller: true
-  domain: telespazio-uk.io
-  group: core
-  kind: Workspace
-  path: github.com/UKEODHP/workspace-controller.git/api/v1alpha1
-  version: v1alpha1
+  - api:
+      crdVersion: v1
+      namespaced: true
+    controller: true
+    domain: telespazio-uk.io
+    group: core
+    kind: Workspace
+    path: github.com/UKEODHP/workspace-controller/api/v1alpha1
+    version: v1alpha1
 version: "3"

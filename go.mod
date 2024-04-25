@@ -1,4 +1,4 @@
-module github.com/UKEODHP/workspace-controller.git
+module github.com/UKEODHP/workspace-controller
 
 go 1.21
 
