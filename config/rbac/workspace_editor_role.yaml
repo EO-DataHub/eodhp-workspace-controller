@@ -11,21 +11,21 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
   name: workspace-editor-role
 rules:
-- apiGroups:
-  - core.telespazio-uk.io.core.telespazio-uk.io
-  resources:
-  - workspaces
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - core.telespazio-uk.io.core.telespazio-uk.io
-  resources:
-  - workspaces/status
-  verbs:
-  - get
+  - apiGroups:
+      - core.telespazio-uk.io
+    resources:
+      - workspaces
+    verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - core.telespazio-uk.io
+    resources:
+      - workspaces/status
+    verbs:
+      - get

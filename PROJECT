@@ -2,19 +2,19 @@
 # This file is used to track the info used to scaffold your project
 # and allow the plugins properly work.
 # More info: https://book.kubebuilder.io/reference/project-config.html
-domain: core.telespazio-uk.io
+domain: telespazio-uk.io
 layout:
 - go.kubebuilder.io/v4
 projectName: workspace-operator
-repo: github.com/Telespazio-UK/workspace-operator.git
+repo: github.com/UKEODHP/workspace-controller.git
 resources:
 - api:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: core.telespazio-uk.io
-  group: core.telespazio-uk.io
+  domain: telespazio-uk.io
+  group: core
   kind: Workspace
-  path: github.com/Telespazio-UK/workspace-operator.git/api/v1alpha1
+  path: github.com/UKEODHP/workspace-controller.git/api/v1alpha1
   version: v1alpha1
 version: "3"

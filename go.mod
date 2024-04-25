@@ -1,4 +1,4 @@
-module github.com/Telespazio-UK/workspace-operator.git
+module github.com/UKEODHP/workspace-controller.git
 
 go 1.21
 

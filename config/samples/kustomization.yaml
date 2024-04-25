@@ -1,4 +1,4 @@
 ## Append samples of your project ##
 resources:
-- core.telespazio-uk.io_v1alpha1_workspace.yaml
+- core_v1alpha1_workspace.yaml
 #+kubebuilder:scaffold:manifestskustomizesamples

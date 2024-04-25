@@ -1,4 +1,4 @@
-apiVersion: core.telespazio-uk.io.core.telespazio-uk.io/v1alpha1
+apiVersion: core.telespazio-uk.io/v1alpha1
 kind: Workspace
 metadata:
   labels:

@@ -1,5 +1,5 @@
 /*
-Copyright 2024 Steven Gillies.
+Copyright 2024 Telespazio UK.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	coretelespazioukiov1alpha1 "github.com/Telespazio-UK/workspace-operator.git/api/v1alpha1"
+	corev1alpha1 "github.com/UKEODHP/workspace-controller.git/api/v1alpha1"
 )
 
 var _ = Describe("Workspace Controller", func() {
@@ -40,13 +40,13 @@ var _ = Describe("Workspace Controller", func() {
 			Name:      resourceName,
 			Namespace: "default", // TODO(user):Modify as needed
 		}
-		workspace := &coretelespazioukiov1alpha1.Workspace{}
+		workspace := &corev1alpha1.Workspace{}
 
 		BeforeEach(func() {
 			By("creating the custom resource for the Kind Workspace")
 			err := k8sClient.Get(ctx, typeNamespacedName, workspace)
 			if err != nil && errors.IsNotFound(err) {
-				resource := &coretelespazioukiov1alpha1.Workspace{
+				resource := &corev1alpha1.Workspace{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      resourceName,
 						Namespace: "default",
@@ -59,7 +59,7 @@ var _ = Describe("Workspace Controller", func() {
 
 		AfterEach(func() {
 			// TODO(user): Cleanup logic after each test, like removing the resource instance.
-			resource := &coretelespazioukiov1alpha1.Workspace{}
+			resource := &corev1alpha1.Workspace{}
 			err := k8sClient.Get(ctx, typeNamespacedName, resource)
 			Expect(err).NotTo(HaveOccurred())
 

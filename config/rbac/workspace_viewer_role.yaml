@@ -11,17 +11,17 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
   name: workspace-viewer-role
 rules:
-- apiGroups:
-  - core.telespazio-uk.io.core.telespazio-uk.io
-  resources:
-  - workspaces
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - core.telespazio-uk.io.core.telespazio-uk.io
-  resources:
-  - workspaces/status
-  verbs:
-  - get
+  - apiGroups:
+      - core.telespazio-uk.io
+    resources:
+      - workspaces
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - core.telespazio-uk.io
+    resources:
+      - workspaces/status
+    verbs:
+      - get
