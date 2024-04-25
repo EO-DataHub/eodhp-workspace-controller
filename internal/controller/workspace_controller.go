@@ -111,7 +111,8 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	workspace.Status.Namespace = namespace.Name
 	if err := r.Status().Update(ctx, workspace); err != nil {
-		log.Error(err, "Failed to update workspace status", "workspace.Status", workspace.Status)
+		log.Error(err, "Failed to update workspace status",
+			"workspace.Status", workspace.Status)
 	}
 	return ctrl.Result{}, nil
 }
@@ -124,12 +125,16 @@ func (r *WorkspaceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 // Delete any child resources of the object.
-func (r *WorkspaceReconciler) deleteChildResources(ctx context.Context, workspace *corev1alpha1.Workspace) error {
+func (r *WorkspaceReconciler) deleteChildResources(
+	ctx context.Context, workspace *corev1alpha1.Workspace) error {
+
 	log := log.FromContext(ctx)
 
 	// Delete namespace
 	var namespace corev1.Namespace
-	if err := client.IgnoreNotFound(r.Get(ctx, client.ObjectKey{Name: workspace.Status.Namespace}, &namespace)); err == nil {
+	if err := client.IgnoreNotFound(
+		r.Get(ctx, client.ObjectKey{Name: workspace.Status.Namespace}, &namespace)); err == nil {
+
 		if err := r.Delete(ctx, &namespace); err != nil {
 			log.Error(err, "Failed to delete namespace", "namespace", workspace.Status.Namespace)
 			return err
