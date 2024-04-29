@@ -27,7 +27,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	coretelespazioukiov1alpha1 "github.com/Telespazio-UK/workspace-operator.git/api/v1alpha1"
+	coretelespazioukiov1alpha1 "github.com/UKEODHP/workspace-operator/api/v1alpha1"
 )
 
 var _ = Describe("Workspace Controller", func() {

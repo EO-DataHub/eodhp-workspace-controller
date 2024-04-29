@@ -24,7 +24,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/Telespazio-UK/workspace-operator.git/test/utils"
+	"github.com/UKEODHP/workspace-operator/test/utils"
 )
 
 const namespace = "workspace-operator-system"

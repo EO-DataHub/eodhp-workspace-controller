@@ -32,7 +32,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	coretelespazioukiov1alpha1 "github.com/Telespazio-UK/workspace-operator.git/api/v1alpha1"
+	coretelespazioukiov1alpha1 "github.com/UKEODHP/workspace-operator/api/v1alpha1"
 	//+kubebuilder:scaffold:imports
 )
 

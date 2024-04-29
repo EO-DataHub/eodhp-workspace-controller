@@ -34,8 +34,8 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	coretelespazioukiov1alpha1 "github.com/Telespazio-UK/workspace-operator.git/api/v1alpha1"
-	"github.com/Telespazio-UK/workspace-operator.git/controller"
+	coretelespazioukiov1alpha1 "github.com/UKEODHP/workspace-operator/api/v1alpha1"
+	"github.com/UKEODHP/workspace-operator/controller"
 	//+kubebuilder:scaffold:imports
 )
 
