@@ -22,7 +22,6 @@ import (
 	corev1alpha1 "github.com/UKEODHP/workspace-controller/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -123,11 +122,11 @@ func (r *WorkspaceReconciler) deleteChildResources(
 	log := log.FromContext(ctx)
 
 	// Delete namespace
-	var namespace corev1.Namespace
+	namespace := &corev1.Namespace{}
 	if err := client.IgnoreNotFound(
-		r.Get(ctx, client.ObjectKey{Name: workspace.Status.Namespace}, &namespace)); err == nil {
+		r.Get(ctx, client.ObjectKey{Name: workspace.Status.Namespace}, namespace)); err == nil {
 
-		if err := r.Delete(ctx, &namespace); err != nil {
+		if err := r.Delete(ctx, namespace); err != nil {
 			log.Error(err, "Failed to delete namespace", "namespace", workspace.Status.Namespace)
 			return err
 		} else {
@@ -145,20 +144,19 @@ func (r *WorkspaceReconciler) ReconcileNamespace(
 	log := log.FromContext(ctx)
 
 	// Create workspace namespace if it does not already exist.
-	var namespace corev1.Namespace
-	if err := r.Get(ctx, client.ObjectKey{Name: workspace.Name}, &namespace); err != nil {
+	namespace := &corev1.Namespace{}
+	if err := r.Get(ctx, client.ObjectKey{Name: workspace.Name}, namespace); err != nil {
 		if errors.IsNotFound(err) {
 			// Namespace does not exist
 			log.Info("Namespace for workspace does not exist", "namespace", workspace.Name)
 
 			// Create namespace
-			namespace = corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{Name: workspace.Name},
-				Spec:       corev1.NamespaceSpec{},
-			}
-			err = client.IgnoreAlreadyExists(r.Create(ctx, &namespace))
+			namespace.Name = workspace.Name
+			err = client.IgnoreAlreadyExists(r.Create(ctx, namespace))
 			if err == nil {
 				log.Info("Namespace created", "name", workspace.Name)
+			} else {
+				return err
 			}
 		} else {
 			log.Error(err, "Failed to get namespace", "namespace", workspace.Name)
