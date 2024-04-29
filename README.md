@@ -57,12 +57,18 @@ kustomize build config/default > manifests.yaml  # all other manifests
 
 ## Extending the Workspace Controller
 
-This module is designed for reuse and extensibility. To extend the workspace controller for your own project do the following:
+This module is designed for reuse and extensibility. This section gives separate details on how to reuse or extend the workspace controller.
+
+### Reuse
+
+This section details how to reuse the workspace controller in your project. This scenario allows you to use the existing functionality of the workspace controller along side any other APIs you wish to generate. It will not allow you to extend the functionality of the workspace controller. You can install the required CRDs to your cluster using the original workspace controller project using `make install`.
 
 1. Scaffold your own Kubebuilder project `kubebuilder init --domain my.domain --owner "My Org"`
-2. Modify the `cmd/main.go` file as follows:
+2. Modify the `cmd/main.go`:
 
 ```golang
+// cmd/main.go
+
 package main
 
 import (
@@ -70,13 +76,10 @@ import (
 
   // add these imports
   corev1alpha1 "github.com/UKEODHP/workspace-controller/api/v1alpha1"
-	"github.com/UKEODHP/workspace-controller/controller"
+	corecontroller "github.com/UKEODHP/workspace-controller/controller"
 )
 
 ...
-
-func init() {
-  ...
 
   // add this scheme
   utilruntime.Must(corev1alpha1.AddToScheme(scheme))
@@ -94,7 +97,7 @@ func main() {
 	}
 
   // add the controller here
-  if err = (&controller.WorkspaceReconciler{
+  if err = (&corecontroller.WorkspaceReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
@@ -106,4 +109,65 @@ func main() {
 }
 ```
 
-You can now extend the controller functionality as you require. You may wish to wrap the `controller.Reconcile` method to add functionality to the workspace reconcile loop.
+### Extend
+
+To extend the functionality, as well as scaffolding a Kubebuilder project, you will also have to generate your own workspace API. You can then import and embed the Workspace, Spec and Status structs and embed them in your own.
+
+You can also call the existing reconciliation methods from your own.
+
+1. Scaffold your own Kubebuilder project `kubebuilder init --domain my.domain --owner "My Org"`
+2. Create your own API which will wrap the core functionality `kubebuilder create api --group ai --kind Workspace --version v1alpha1`.
+3. Modify the `cmd/main.go`:
+
+```golang
+// cmd/main.go
+
+package main
+
+import (
+  ...
+
+  // add these imports
+  corecontroller "github.com/UKEODHP/workspace-controller/controller"
+)
+
+func main() {
+  ...
+
+  if err = (&controller.WorkspaceReconciler{
+		WorkspaceReconciler: corecontroller.WorkspaceReconciler{
+			Client: mgr.GetClient(),
+			Scheme: mgr.GetScheme(),
+		},  // insert embedded reconciler into your own
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Workspace")
+		os.Exit(1)
+	}
+	//+kubebuilder:scaffold:builder
+}
+```
+
+3. Modify the `api/v1alpha1/workspace_types.go` file to embed core structs within your own:
+
+```golang
+package v1alpha1
+
+import (
+	corev1alpha1 "github.com/UKEODHP/workspace-controller/api/v1alpha1"
+)
+
+type WorkspaceSpec struct {
+	corev1alpha1.WorkspaceSpec `json:",inline"`
+}
+
+// WorkspaceStatus defines the observed state of Workspace
+type WorkspaceStatus struct {
+	corev1alpha1.WorkspaceStatus `json:",inline"`
+}
+```
+
+Now generate the CRDs with `make manifests` and verify they are correct.
+
+4. Call the reconcile core reconcile logic as required from your extension packages reconcile loop.
+
+TODO: this does not work correctly at the moment.
