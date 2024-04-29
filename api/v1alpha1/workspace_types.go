@@ -1,5 +1,5 @@
 /*
-Copyright 2024 Steven Gillies.
+Copyright 2024 Telespazio UK.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -27,15 +27,15 @@ import (
 type WorkspaceSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-
-	// Foo is an example field of Workspace. Edit workspace_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
 }
 
 // WorkspaceStatus defines the observed state of Workspace
 type WorkspaceStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+
+	// Name of child namespace
+	Namespace string `json:"namespace,omitempty"`
 }
 
 //+kubebuilder:object:root=true

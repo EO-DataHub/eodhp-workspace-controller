@@ -1,5 +1,5 @@
 /*
-Copyright 2024 Steven Gillies.
+Copyright 2024 Telespazio UK.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/UKEODHP/workspace-operator/test/utils"
+	"github.com/UKEODHP/workspace-controller/test/utils"
 )
 
 const namespace = "workspace-operator-system"

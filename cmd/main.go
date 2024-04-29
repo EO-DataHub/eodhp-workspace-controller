@@ -1,5 +1,5 @@
 /*
-Copyright 2024 Steven Gillies.
+Copyright 2024 Telespazio UK.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -34,8 +34,8 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	coretelespazioukiov1alpha1 "github.com/UKEODHP/workspace-operator/api/v1alpha1"
-	"github.com/UKEODHP/workspace-operator/controller"
+	corev1alpha1 "github.com/UKEODHP/workspace-controller/api/v1alpha1"
+	"github.com/UKEODHP/workspace-controller/internal/controller"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -47,7 +47,7 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
-	utilruntime.Must(coretelespazioukiov1alpha1.AddToScheme(scheme))
+	utilruntime.Must(corev1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -104,7 +104,7 @@ func main() {
 		WebhookServer:          webhookServer,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "16b6c8a0.core.telespazio-uk.io",
+		LeaderElectionID:       "33b2bad3.telespazio-uk.io",
 		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
 		// when the Manager ends. This requires the binary to immediately end when the
 		// Manager is stopped, otherwise, this setting is unsafe. Setting this significantly
