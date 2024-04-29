@@ -51,12 +51,38 @@ type WorkspaceReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.17.2/pkg/reconcile
 func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := log.FromContext(ctx)
-
+	// Get a reference to the workspace that has been updated
 	workspace := &corev1alpha1.Workspace{}
 	if err := r.Get(ctx, req.NamespacedName, workspace); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+
+	// Handle finalizer
+	if continue_, err := r.ReconcileFinalizer(ctx, workspace); err != nil {
+		return ctrl.Result{}, err
+	} else if !continue_ {
+		// Workspace is being deleted, do not continue with reconciliation
+		return ctrl.Result{}, nil
+	}
+
+	// Reconcile namespace
+	if err := r.ReconcileNamespace(ctx, workspace); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	return ctrl.Result{}, nil
+}
+
+// SetupWithManager sets up the controller with the Manager.
+func (r *WorkspaceReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&corev1alpha1.Workspace{}).
+		Complete(r)
+}
+
+// Reconcile finalizer
+func (r *WorkspaceReconciler) ReconcileFinalizer(ctx context.Context, workspace *corev1alpha1.Workspace) (bool, error) {
+	log := log.FromContext(ctx)
 
 	// Create finalizer
 	finalizer := "core.telespazio-uk.io/workspace-finalizer"
@@ -76,52 +102,18 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			// Our finalizer is present, so lets handle any external dependency
 			if err := r.deleteChildResources(ctx, workspace); err != nil {
 				// If we fail to delete the external resource, we need to requeue the item
-				return ctrl.Result{}, err
+				return false, err
 			}
 			// Remove our finalizer from the list and update it.
 			controllerutil.RemoveFinalizer(workspace, finalizer)
 			if err := r.Update(ctx, workspace); err != nil {
-				return ctrl.Result{}, err
+				return false, err
 			}
 		}
 		// Stop reconciliation as the item is being deleted.
-		return ctrl.Result{}, nil
+		return false, nil
 	}
-
-	// Create workspace namespace if it does not already exist.
-	var namespace corev1.Namespace
-	if err := r.Get(ctx, client.ObjectKey{Name: workspace.Name}, &namespace); err != nil {
-		if errors.IsNotFound(err) {
-			log.Info("Namespace for workspace does not exist", "namespace", workspace.Name)
-
-			// Create namespace
-			namespace = corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{Name: workspace.Name},
-				Spec:       corev1.NamespaceSpec{},
-			}
-			err = client.IgnoreAlreadyExists(r.Create(ctx, &namespace))
-			if err == nil {
-				log.Info("Namespace created", "workspace.Status", workspace.Status)
-			}
-		} else {
-			log.Error(err, "Failed to get namespace", "namespace", workspace.Name)
-			return ctrl.Result{}, err
-		}
-	}
-
-	workspace.Status.Namespace = namespace.Name
-	if err := r.Status().Update(ctx, workspace); err != nil {
-		log.Error(err, "Failed to update workspace status",
-			"workspace.Status", workspace.Status)
-	}
-	return ctrl.Result{}, nil
-}
-
-// SetupWithManager sets up the controller with the Manager.
-func (r *WorkspaceReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&corev1alpha1.Workspace{}).
-		Complete(r)
+	return true, nil
 }
 
 // Delete any child resources of the object.
@@ -141,6 +133,44 @@ func (r *WorkspaceReconciler) deleteChildResources(
 		} else {
 			log.Info("Namespace deleted", "namespace", workspace.Status.Namespace)
 		}
+	}
+
+	return nil
+}
+
+// Create the workspace namespace if it does not already exist and update the
+// workspace status with the namespace name.
+func (r *WorkspaceReconciler) ReconcileNamespace(
+	ctx context.Context, workspace *corev1alpha1.Workspace) error {
+	log := log.FromContext(ctx)
+
+	// Create workspace namespace if it does not already exist.
+	var namespace corev1.Namespace
+	if err := r.Get(ctx, client.ObjectKey{Name: workspace.Name}, &namespace); err != nil {
+		if errors.IsNotFound(err) {
+			// Namespace does not exist
+			log.Info("Namespace for workspace does not exist", "namespace", workspace.Name)
+
+			// Create namespace
+			namespace = corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{Name: workspace.Name},
+				Spec:       corev1.NamespaceSpec{},
+			}
+			err = client.IgnoreAlreadyExists(r.Create(ctx, &namespace))
+			if err == nil {
+				log.Info("Namespace created", "name", workspace.Name)
+			}
+		} else {
+			log.Error(err, "Failed to get namespace", "namespace", workspace.Name)
+			return err
+		}
+	}
+
+	// Update workspace status with namespace name
+	workspace.Status.Namespace = namespace.Name
+	if err := r.Status().Update(ctx, workspace); err != nil {
+		log.Error(err, "Failed to update workspace status",
+			"workspace.Status", workspace.Status)
 	}
 
 	return nil
