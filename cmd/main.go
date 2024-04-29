@@ -23,6 +23,7 @@ import (
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
+	"gopkg.in/yaml.v3"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -57,6 +58,7 @@ func main() {
 	var probeAddr string
 	var secureMetrics bool
 	var enableHTTP2 bool
+	var configPath string
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
@@ -69,6 +71,7 @@ func main() {
 	opts := zap.Options{
 		Development: true,
 	}
+	flag.StringVar(&configPath, "config", "", "Path to config file.")
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
 
@@ -93,6 +96,29 @@ func main() {
 	webhookServer := webhook.NewServer(webhook.Options{
 		TLSOpts: tlsOpts,
 	})
+
+	var c config
+	if configPath != "" {
+		if err := c.Load(configPath); err != nil {
+			setupLog.Error(err, "Problem loading config file")
+			os.Exit(1)
+		} else {
+			setupLog.Info("Config loaded successfully", "config", configPath)
+
+		}
+	} else {
+		setupLog.Info("No config file provided. Use --config flag to provide a path to a config file.")
+	}
+
+	if c.AWS.Region != "" {
+		setupLog.Info("AWS region set. AWS support enabled.", "region", c.AWS.Region)
+		c.AWS.UniqueString = c.ClusterName // use cluster name as unique resource string
+		if err := controller.GetAWSClient().Initialise(c.AWS); err != nil {
+			setupLog.Error(err, "Problem initialising AWS client")
+		}
+	} else {
+		setupLog.Info("No AWS region set. Use --config AWS support disabled.")
+	}
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme: scheme,
@@ -145,4 +171,23 @@ func main() {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
+}
+
+type config struct {
+	AWS         controller.AWSConfig `yaml:"aws"`
+	ClusterName string               `yaml:"clusterName"`
+}
+
+func (c *config) Load(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		setupLog.Error(err, "Problem reading config file")
+		return err
+	}
+
+	if err := yaml.Unmarshal(data, c); err != nil {
+		setupLog.Error(err, "Problem unmarshaling config file")
+		return err
+	}
+	return nil
 }

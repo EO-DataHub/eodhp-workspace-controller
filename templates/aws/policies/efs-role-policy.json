@@ -1,0 +1,15 @@
+{
+  "Statement": [
+    {
+      "Action": [
+        "elasticfilesystem:DescribeAccessPoints",
+        "elasticfilesystem:CreateAccessPoint",
+        "elasticfilesystem:DeleteAccessPoint",
+        "elasticfilesystem:TagResource"
+      ],
+      "Effect": "Allow",
+      "Resource": "arn:aws:elasticfilesystem:eu-west-2:{{.accountID}}:file-system/{{.efsID}}"
+    }
+  ],
+  "Version": "2012-10-17"
+}

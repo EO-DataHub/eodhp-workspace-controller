@@ -38,7 +38,7 @@ type WorkspaceReconciler struct {
 //+kubebuilder:rbac:groups=core.telespazio-uk.io,resources=workspaces,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core.telespazio-uk.io,resources=workspaces/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=core.telespazio-uk.io,resources=workspaces/finalizers,verbs=update
-// +kubebuilder:rbac:groups=core,resources=namespaces,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=core,resources=namespaces,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -68,6 +68,9 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	if err := r.ReconcileNamespace(ctx, workspace); err != nil {
 		return ctrl.Result{}, err
 	}
+
+	// Reconcile AWS resources
+	GetAWSClient().Reconcile(ctx, workspace)
 
 	return ctrl.Result{}, nil
 }
@@ -128,11 +131,13 @@ func (r *WorkspaceReconciler) deleteChildResources(
 
 		if err := r.Delete(ctx, namespace); err != nil {
 			log.Error(err, "Failed to delete namespace", "namespace", workspace.Status.Namespace)
-			return err
 		} else {
 			log.Info("Namespace deleted", "namespace", workspace.Status.Namespace)
 		}
 	}
+
+	// Delete AWS resources
+	GetAWSClient().DeleteChildResources(ctx, workspace)
 
 	return nil
 }
