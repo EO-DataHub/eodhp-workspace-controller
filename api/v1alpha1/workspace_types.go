@@ -23,10 +23,21 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
+type StorageSpec struct {
+	// Kubernetes storage class to use
+	StorageClass string `json:"storageClass,omitempty"`
+
+	// Size of the storage
+	Size string `json:"size,omitempty"`
+}
+
 // WorkspaceSpec defines the desired state of Workspace
 type WorkspaceSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+
+	// Storage
+	Storage StorageSpec `json:"storage,omitempty"`
 }
 
 // WorkspaceStatus defines the observed state of Workspace

@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"sync"
 
 	"text/template"
 
@@ -50,26 +49,12 @@ type AWSConfig struct {
 	UniqueString string `yaml:"uniqueString"`
 }
 
-type awsClient struct {
+type AWSClient struct {
 	config AWSConfig
 	sess   *session.Session
 }
 
-var lock = &sync.Mutex{}
-var awsClient_ *awsClient
-
-func GetAWSClient() *awsClient {
-	if awsClient_ == nil {
-		lock.Lock()
-		defer lock.Unlock()
-		if awsClient_ == nil {
-			awsClient_ = &awsClient{}
-		}
-	}
-	return awsClient_
-}
-
-func (c *awsClient) Initialise(config AWSConfig) error {
+func (c *AWSClient) Initialise(config AWSConfig) error {
 	c.config = config
 
 	// Create a new session.
@@ -84,11 +69,11 @@ func (c *awsClient) Initialise(config AWSConfig) error {
 	}
 }
 
-func (c *awsClient) Enabled() bool {
+func (c *AWSClient) Enabled() bool {
 	return c.sess != nil
 }
 
-func (c *awsClient) Reconcile(ctx context.Context, workspace *corev1alpha1.Workspace) error {
+func (c *AWSClient) Reconcile(ctx context.Context, workspace *corev1alpha1.Workspace) error {
 	log := log.FromContext(ctx)
 	uniqueName := fmt.Sprintf("%s-%s", workspace.Name, c.config.UniqueString)
 
@@ -106,7 +91,7 @@ func (c *awsClient) Reconcile(ctx context.Context, workspace *corev1alpha1.Works
 	return nil
 }
 
-func (c *awsClient) ReconcileIAMUser(username string) (*iam.User, error) {
+func (c *AWSClient) ReconcileIAMUser(username string) (*iam.User, error) {
 	iam_ := iam.New(c.sess)
 
 	if user, err := iam_.GetUser(&iam.GetUserInput{
@@ -131,7 +116,7 @@ func (c *awsClient) ReconcileIAMUser(username string) (*iam.User, error) {
 	}
 }
 
-func (c *awsClient) ReconcileIAMRole(ctx context.Context, roleName, namespace string) (*iam.Role, error) {
+func (c *AWSClient) ReconcileIAMRole(ctx context.Context, roleName, namespace string) (*iam.Role, error) {
 	log := log.FromContext(ctx)
 
 	iam_ := iam.New(c.sess)
@@ -183,7 +168,7 @@ func (c *awsClient) ReconcileIAMRole(ctx context.Context, roleName, namespace st
 	}
 }
 
-func (c *awsClient) ReconcileIAMRolePolicy(ctx context.Context, policyName string, role *iam.Role) (*string, error) {
+func (c *AWSClient) ReconcileIAMRolePolicy(ctx context.Context, policyName string, role *iam.Role) (*string, error) {
 	log := log.FromContext(ctx)
 
 	iam_ := iam.New(c.sess)
@@ -233,7 +218,7 @@ func (c *awsClient) ReconcileIAMRolePolicy(ctx context.Context, policyName strin
 	}
 }
 
-func (c *awsClient) DeleteChildResources(ctx context.Context, workspace *corev1alpha1.Workspace) error {
+func (c *AWSClient) DeleteChildResources(ctx context.Context, workspace *corev1alpha1.Workspace) error {
 	log := log.FromContext(ctx)
 	uniqueName := fmt.Sprintf("%s-%s", workspace.Name, c.config.UniqueString)
 
@@ -250,7 +235,7 @@ func (c *awsClient) DeleteChildResources(ctx context.Context, workspace *corev1a
 	return nil
 }
 
-func (c *awsClient) DeleteIAMRole(ctx context.Context, roleName string) error {
+func (c *AWSClient) DeleteIAMRole(ctx context.Context, roleName string) error {
 	log := log.FromContext(ctx)
 
 	iam_ := iam.New(c.sess)
@@ -273,7 +258,7 @@ func (c *awsClient) DeleteIAMRole(ctx context.Context, roleName string) error {
 	return nil
 }
 
-func (c *awsClient) DeleteIAMRolePolicy(ctx context.Context, policyName string) error {
+func (c *AWSClient) DeleteIAMRolePolicy(ctx context.Context, policyName string) error {
 	log := log.FromContext(ctx)
 
 	iam_ := iam.New(c.sess)

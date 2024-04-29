@@ -18,10 +18,13 @@ package controller
 
 import (
 	"context"
+	"os"
 
 	corev1alpha1 "github.com/UKEODHP/workspace-controller/api/v1alpha1"
+	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -33,12 +36,37 @@ import (
 type WorkspaceReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+	config Config
+	aws    AWSClient
+}
+
+func NewWorkspaceReconciler(client client.Client, scheme *runtime.Scheme,
+	config Config) *WorkspaceReconciler {
+
+	aws := AWSClient{}
+	if config.AWS.Region != "" {
+		log.Log.Info("AWS region set. AWS support enabled.", "region", config.AWS.Region)
+		config.AWS.UniqueString = config.ClusterName // use cluster name as unique resource string
+		if err := aws.Initialise(config.AWS); err != nil {
+			log.Log.Error(err, "Problem initialising AWS client")
+		}
+	} else {
+		log.Log.Info("No AWS region set. AWS support disabled.")
+	}
+
+	return &WorkspaceReconciler{
+		Client: client,
+		Scheme: scheme,
+		config: config,
+		aws:    aws,
+	}
 }
 
 //+kubebuilder:rbac:groups=core.telespazio-uk.io,resources=workspaces,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core.telespazio-uk.io,resources=workspaces/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=core.telespazio-uk.io,resources=workspaces/finalizers,verbs=update
 //+kubebuilder:rbac:groups=core,resources=namespaces,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=core,resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -70,7 +98,12 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	// Reconcile AWS resources
-	GetAWSClient().Reconcile(ctx, workspace)
+	r.aws.Reconcile(ctx, workspace)
+
+	// Reconcile block storage
+	if err := r.ReconcileBlockStorage(ctx, workspace); err != nil {
+		return ctrl.Result{}, err
+	}
 
 	return ctrl.Result{}, nil
 }
@@ -102,7 +135,7 @@ func (r *WorkspaceReconciler) ReconcileFinalizer(ctx context.Context, workspace 
 		// The object is being deleted
 		if controllerutil.ContainsFinalizer(workspace, finalizer) {
 			// Our finalizer is present, so lets handle any external dependency
-			if err := r.deleteChildResources(ctx, workspace); err != nil {
+			if err := r.DeleteChildResources(ctx, workspace); err != nil {
 				// If we fail to delete the external resource, we need to requeue the item
 				return false, err
 			}
@@ -119,25 +152,15 @@ func (r *WorkspaceReconciler) ReconcileFinalizer(ctx context.Context, workspace 
 }
 
 // Delete any child resources of the object.
-func (r *WorkspaceReconciler) deleteChildResources(
+func (r *WorkspaceReconciler) DeleteChildResources(
 	ctx context.Context, workspace *corev1alpha1.Workspace) error {
 
-	log := log.FromContext(ctx)
-
-	// Delete namespace
-	namespace := &corev1.Namespace{}
-	if err := client.IgnoreNotFound(
-		r.Get(ctx, client.ObjectKey{Name: workspace.Status.Namespace}, namespace)); err == nil {
-
-		if err := r.Delete(ctx, namespace); err != nil {
-			log.Error(err, "Failed to delete namespace", "namespace", workspace.Status.Namespace)
-		} else {
-			log.Info("Namespace deleted", "namespace", workspace.Status.Namespace)
-		}
-	}
+	// Delete Kubernetes resources.
+	r.DeleteBlockStorage(ctx, workspace)
+	r.DeleteNamespace(ctx, workspace)
 
 	// Delete AWS resources
-	GetAWSClient().DeleteChildResources(ctx, workspace)
+	r.aws.DeleteChildResources(ctx, workspace)
 
 	return nil
 }
@@ -174,6 +197,121 @@ func (r *WorkspaceReconciler) ReconcileNamespace(
 	if err := r.Status().Update(ctx, workspace); err != nil {
 		log.Error(err, "Failed to update workspace status",
 			"workspace.Status", workspace.Status)
+	}
+
+	return nil
+}
+
+func (r *WorkspaceReconciler) DeleteNamespace(
+	ctx context.Context, workspace *corev1alpha1.Workspace) error {
+	log := log.FromContext(ctx)
+
+	namespace := &corev1.Namespace{}
+	if err := client.IgnoreNotFound(
+		r.Get(ctx, client.ObjectKey{Name: workspace.Status.Namespace}, namespace)); err == nil {
+
+		if err := r.Delete(ctx, namespace); err != nil {
+			log.Error(err, "Failed to delete namespace", "namespace", workspace.Status.Namespace)
+			return err
+		} else {
+			log.Info("Namespace deleted", "namespace", workspace.Status.Namespace)
+		}
+	}
+	return nil
+}
+
+func (r *WorkspaceReconciler) ReconcileBlockStorage(
+	ctx context.Context, workspace *corev1alpha1.Workspace) error {
+	log := log.FromContext(ctx)
+
+	pvc := &corev1.PersistentVolumeClaim{}
+	if err := r.Get(ctx, client.ObjectKey{
+		Name:      workspace.Name,
+		Namespace: workspace.Status.Namespace}, pvc); err == nil {
+		return nil // PersistentVolumeClaim already exists
+	} else {
+		if errors.IsNotFound(err) {
+			// PersistentVolumeClaim does not exist
+			log.Info("PersistentVolumeClaim for workspace does not exist",
+				"pvc", workspace.Name)
+		} else {
+			log.Error(err, "Failed to get PersistentVolumeClaim",
+				"pvc", workspace.Name)
+			return err
+		}
+	}
+
+	// Create block storage
+	pvc.Name = workspace.Name
+	pvc.Namespace = workspace.Status.Namespace
+	pvc.Spec.StorageClassName = &workspace.Spec.Storage.StorageClass
+	pvc.Spec.AccessModes = []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce}
+	var storageSize string
+	if workspace.Spec.Storage.Size != "" {
+		storageSize = workspace.Spec.Storage.Size
+	} else if r.config.Storage.DefaultSize != "" {
+		storageSize = r.config.Storage.DefaultSize
+	} else {
+		storageSize = "2Gi"
+	}
+	pvc.Spec.Resources.Requests = corev1.ResourceList{
+		corev1.ResourceName(corev1.ResourceStorage): resource.MustParse(storageSize),
+	}
+	if err := client.IgnoreAlreadyExists(r.Create(ctx, pvc)); err == nil {
+		log.Info("PersistentVolumeClaim created", "name", workspace.Name)
+		return nil
+	} else {
+		return err
+	}
+}
+
+func (r *WorkspaceReconciler) DeleteBlockStorage(
+	ctx context.Context, workspace *corev1alpha1.Workspace) error {
+	log := log.FromContext(ctx)
+
+	// Delete block storage
+	pvc := &corev1.PersistentVolumeClaim{}
+	if err := r.Get(ctx, client.ObjectKey{
+		Name:      workspace.Name,
+		Namespace: workspace.Status.Namespace}, pvc); err != nil {
+		if errors.IsNotFound(err) {
+			// PersistentVolumeClaim does not exist
+			return nil
+		} else {
+			log.Error(err, "Failed to get PersistentVolumeClaim",
+				"pvc", workspace.Name)
+			return err
+		}
+	}
+	if err := r.Delete(ctx, pvc); err != nil {
+		log.Error(err, "Failed to delete PersistentVolumeClaim",
+			"pvc", workspace.Name)
+		return err
+	} else {
+		log.Info("PersistentVolumeClaim deleted", "pvc", workspace.Name)
+		return nil
+	}
+}
+
+type Config struct {
+	AWS         AWSConfig `yaml:"aws"`
+	ClusterName string    `yaml:"clusterName"`
+	Storage     struct {
+		StorageClass string `yaml:"storageClass"`
+		DefaultSize  string `yaml:"defaultSize"`
+	} `yaml:"storage"`
+}
+
+func (c *Config) Load(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		log.Log.Error(err, "Problem reading config file")
+		return err
+	}
+
+	if err := yaml.Unmarshal(data, c); err != nil {
+		log.Log.Error(err, "Problem unmarshaling config file")
+		return err
 	}
 
 	return nil
