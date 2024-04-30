@@ -54,3 +54,23 @@ make install  # install the CRDs to the cluster
 kustomize build config/crd > crds.yaml  # crds
 kustomize build config/default > manifests.yaml  # all other manifests
 ```
+
+## Configuration
+
+A file path with following parameters is required to be passed to the operator with `--config <path>` flag.
+
+```yaml
+clusterName: my-cluster
+storage:
+  defaultSize: 4Gi
+aws:
+  accountID: 123456789
+  region: eu-west-2
+  auth:
+    accessKey: access-key
+    secretKey: secret-key
+  oidc:
+    provider: oidc.eks.my-region.amazonaws.com/id/A1B2C3D4E5F6G7H8
+  storage:
+    efsID: fs-abc123def456
+```
