@@ -29,6 +29,13 @@ type StorageSpec struct {
 
 	// Size of the storage
 	Size string `json:"size,omitempty"`
+
+	// Define the EFS storage
+	AWSEFS AWSEFSSpec `json:"awsEFS,omitempty"`
+}
+
+type StorageStatus struct {
+	AWSEFS AWSEFSStatus `json:"awsEFS,omitempty"`
 }
 
 // WorkspaceSpec defines the desired state of Workspace
@@ -46,8 +53,9 @@ type WorkspaceStatus struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// Name of child namespace
-	Namespace string `json:"namespace,omitempty"`
-	AWSRole string `json:"awsRole,omitempty"`
+	Namespace string        `json:"namespace,omitempty"`
+	AWSRole   string        `json:"awsRole,omitempty"`
+	Storage   StorageStatus `json:"storage,omitempty"`
 }
 
 //+kubebuilder:object:root=true

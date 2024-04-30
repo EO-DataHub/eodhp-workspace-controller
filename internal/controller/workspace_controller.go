@@ -46,7 +46,6 @@ func NewWorkspaceReconciler(client client.Client, scheme *runtime.Scheme,
 	aws := aws.AWSClient{}
 	if config.AWS.Region != "" {
 		log.Log.Info("AWS region set. AWS support enabled.", "region", config.AWS.Region)
-		config.AWS.UniqueString = config.ClusterName // use cluster name as unique resource string
 		if err := aws.Initialise(config.AWS); err != nil {
 			log.Log.Error(err, "Problem initialising AWS client")
 		}
@@ -66,7 +65,7 @@ func NewWorkspaceReconciler(client client.Client, scheme *runtime.Scheme,
 //+kubebuilder:rbac:groups=core.telespazio-uk.io,resources=workspaces/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=core.telespazio-uk.io,resources=workspaces/finalizers,verbs=update
 //+kubebuilder:rbac:groups=core,resources=namespaces,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=core,resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=core,resources=persistentvolume,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -102,21 +101,60 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			log.Error(err, "Failed to update namespace in workspace status",
 				"workspace.Status", workspace.Status)
 		}
-		// continue with
+		// continue with reconciliation
 	} else {
 		return ctrl.Result{}, err
 	}
 
 	// Reconcile AWS resources
-	r.aws.Reconcile(ctx, workspace)
+	uniqueName := fmt.Sprintf("%s-%s", workspace.Name, r.config.ClusterName)
+	if r.aws.Enabled() {
+		// Reconcile IAM
+		role, err := r.aws.ReconcileIAMRole(ctx, uniqueName, workspace.Status.Namespace)
+		if err == nil {
+			workspace.Status.AWSRole = *role.RoleName
+			if err := r.Status().Update(ctx, workspace); err != nil {
+				log.Error(err, "Failed to update role name in workspace status",
+					"workspace.Status", workspace.Status, "role", *role.RoleName)
+			}
+		} else {
+			log.Error(err, "Failed to reconcile IAM role", "role", workspace.Name)
+		}
+		if _, err = r.aws.ReconcileIAMRolePolicy(ctx, uniqueName, role); err != nil {
+			log.Error(err, "Failed to reconcile IAM role policy", "policy", workspace.Name)
+		}
+
+		// Reconcile EFS Access Points
+		if apID, err := r.aws.ReconcileEFSAccessPoint(ctx, r.config.AWS.Storage.EFSID,
+			&workspace.Spec.Storage.AWSEFS); err == nil {
+
+			workspace.Status.Storage.AWSEFS.AccessPointID = *apID
+			if err := r.Status().Update(ctx, workspace); err != nil {
+				log.Error(err, "Failed to update EFS Access Point ID in workspace status",
+					"workspace.Status", workspace.Status, "EFS Access Point ID", *apID)
+			}
+		} else {
+			log.Error(err, "Failed to reconcile EFS access point",
+				"access point", workspace.Spec.Storage.AWSEFS)
+		}
+	}
 
 	// Reconcile block storage
-	if err := r.ReconcileBlockStorage(ctx, workspace.Name, workspace.Status.Namespace,
-		&workspace.Spec.Storage, &(corev1.CSIPersistentVolumeSource{
-			Driver:       "efs.csi.aws.com",
-			VolumeHandle: fmt.Sprintf("%s:%s:%s", r.config.AWS.UniqueString, workspace.Name, workspace.Status.Namespace),
-		})); err != nil {
-		return ctrl.Result{}, err
+	if workspace.Status.Storage.AWSEFS.AccessPointID != "" {
+		if err := r.ReconcileBlockStorage(ctx, workspace.Name,
+			workspace.Status.Namespace,
+			&workspace.Spec.Storage,
+			&(corev1.CSIPersistentVolumeSource{
+				Driver: "efs.csi.aws.com",
+				VolumeHandle: fmt.Sprintf(
+					"%s:%s:%s",
+					r.config.AWS.Storage.EFSID,
+					workspace.Spec.Storage.AWSEFS.RootDirectory,
+					workspace.Status.Storage.AWSEFS.AccessPointID,
+				),
+			})); err != nil {
+			return ctrl.Result{}, err
+		}
 	}
 
 	return ctrl.Result{}, nil
@@ -180,7 +218,15 @@ func (r *WorkspaceReconciler) DeleteChildResources(
 	}
 
 	// Delete AWS resources
-	r.aws.DeleteChildResources(ctx, workspace)
+	if r.aws.Enabled() {
+		uniqueName := fmt.Sprintf("%s-%s", workspace.Name, r.config.ClusterName)
+		if err := r.aws.DeleteIAMRolePolicy(ctx, uniqueName); err != nil {
+			log.Error(err, "Failed to delete IAM role policy", "role", uniqueName)
+		}
+		if err := r.aws.DeleteIAMRole(ctx, uniqueName); err != nil {
+			log.Error(err, "Failed to delete IAM role", "role", uniqueName)
+		}
+	}
 
 	return nil
 }

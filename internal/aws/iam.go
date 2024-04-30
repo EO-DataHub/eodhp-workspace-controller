@@ -13,9 +13,9 @@ import (
 )
 
 func (c *AWSClient) ReconcileIAMUser(username string) (*iam.User, error) {
-	iam_ := iam.New(c.sess)
+	svc := iam.New(c.sess)
 
-	if user, err := iam_.GetUser(&iam.GetUserInput{
+	if user, err := svc.GetUser(&iam.GetUserInput{
 		UserName: &username,
 	}); err == nil {
 		return user.User, nil // User exists.
@@ -28,7 +28,7 @@ func (c *AWSClient) ReconcileIAMUser(username string) (*iam.User, error) {
 	}
 
 	// User does not exist. Create user.
-	if user, err := iam_.CreateUser(&iam.CreateUserInput{
+	if user, err := svc.CreateUser(&iam.CreateUserInput{
 		UserName: &username,
 	}); err == nil {
 		return user.User, nil
@@ -40,9 +40,9 @@ func (c *AWSClient) ReconcileIAMUser(username string) (*iam.User, error) {
 func (c *AWSClient) ReconcileIAMRole(ctx context.Context, roleName, namespace string) (*iam.Role, error) {
 	log := log.FromContext(ctx)
 
-	iam_ := iam.New(c.sess)
+	svc := iam.New(c.sess)
 
-	if role, err := iam_.GetRole(&iam.GetRoleInput{
+	if role, err := svc.GetRole(&iam.GetRoleInput{
 		RoleName: &roleName,
 	}); err == nil {
 		return role.Role, nil // Role exists.
@@ -77,7 +77,7 @@ func (c *AWSClient) ReconcileIAMRole(ctx context.Context, roleName, namespace st
 	}); err != nil {
 		return nil, err
 	}
-	if role, err := iam_.CreateRole(&iam.CreateRoleInput{
+	if role, err := svc.CreateRole(&iam.CreateRoleInput{
 		RoleName:                 &roleName,
 		Path:                     aws.String("/"),
 		AssumeRolePolicyDocument: aws.String(assumeRolePolicyDocument.String()),
@@ -92,9 +92,9 @@ func (c *AWSClient) ReconcileIAMRole(ctx context.Context, roleName, namespace st
 func (c *AWSClient) DeleteIAMRole(ctx context.Context, roleName string) error {
 	log := log.FromContext(ctx)
 
-	iam_ := iam.New(c.sess)
+	svc := iam.New(c.sess)
 
-	if _, err := iam_.DeleteRole(&iam.DeleteRoleInput{
+	if _, err := svc.DeleteRole(&iam.DeleteRoleInput{
 		RoleName: &roleName,
 	}); err == nil {
 		log.Info("Role deleted", "role", roleName)
@@ -115,9 +115,9 @@ func (c *AWSClient) DeleteIAMRole(ctx context.Context, roleName string) error {
 func (c *AWSClient) ReconcileIAMRolePolicy(ctx context.Context, policyName string, role *iam.Role) (*string, error) {
 	log := log.FromContext(ctx)
 
-	iam_ := iam.New(c.sess)
+	svc := iam.New(c.sess)
 
-	if policy, err := iam_.GetRolePolicy(&iam.GetRolePolicyInput{
+	if policy, err := svc.GetRolePolicy(&iam.GetRolePolicyInput{
 		PolicyName: &policyName,
 		RoleName:   role.RoleName,
 	}); err == nil {
@@ -149,7 +149,7 @@ func (c *AWSClient) ReconcileIAMRolePolicy(ctx context.Context, policyName strin
 	}); err != nil {
 		return nil, err
 	}
-	if policy, err := iam_.PutRolePolicy(&iam.PutRolePolicyInput{
+	if policy, err := svc.PutRolePolicy(&iam.PutRolePolicyInput{
 		PolicyDocument: aws.String(rolePolicyDocument.String()),
 		PolicyName:     &policyName,
 		RoleName:       role.RoleName,
@@ -165,9 +165,9 @@ func (c *AWSClient) ReconcileIAMRolePolicy(ctx context.Context, policyName strin
 func (c *AWSClient) DeleteIAMRolePolicy(ctx context.Context, policyName string) error {
 	log := log.FromContext(ctx)
 
-	iam_ := iam.New(c.sess)
+	svc := iam.New(c.sess)
 
-	if _, err := iam_.DeleteRolePolicy(&iam.DeleteRolePolicyInput{
+	if _, err := svc.DeleteRolePolicy(&iam.DeleteRolePolicyInput{
 		PolicyName: &policyName,
 		RoleName:   &policyName,
 	}); err == nil {

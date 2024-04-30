@@ -42,6 +42,21 @@ spec:
               storage:
                 description: Storage
                 properties:
+                  awsEFS:
+                    description: Define the EFS storage
+                    properties:
+                      posixUser:
+                        properties:
+                          gid:
+                            format: int64
+                            type: integer
+                          uid:
+                            format: int64
+                            type: integer
+                        type: object
+                      rootDirectory:
+                        type: string
+                    type: object
                   size:
                     description: Size of the storage
                     type: string
@@ -58,6 +73,14 @@ spec:
               namespace:
                 description: Name of child namespace
                 type: string
+              storage:
+                properties:
+                  awsEFS:
+                    properties:
+                      accessPointID:
+                        type: string
+                    type: object
+                type: object
             type: object
         type: object
     served: true

@@ -17,14 +17,10 @@ limitations under the License.
 package aws
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
-	"sigs.k8s.io/controller-runtime/pkg/log"
-
-	corev1alpha1 "github.com/UKEODHP/workspace-controller/api/v1alpha1"
 )
 
 type AWSConfig struct {
@@ -40,7 +36,6 @@ type AWSConfig struct {
 	Storage struct {
 		EFSID string `yaml:"efsID"`
 	}
-	UniqueString string `yaml:"uniqueString"`
 }
 
 type AWSClient struct {
@@ -56,49 +51,14 @@ func (c *AWSClient) Initialise(config AWSConfig) error {
 		Region: aws.String(config.Region),
 	}); err == nil {
 		c.sess = sess
-		return nil
 	} else {
 		fmt.Println("Error creating AWS session ", err)
 		return err
 	}
+
+	return nil
 }
 
 func (c *AWSClient) Enabled() bool {
 	return c.sess != nil
-}
-
-func (c *AWSClient) Reconcile(ctx context.Context, workspace *corev1alpha1.Workspace) error {
-	log := log.FromContext(ctx)
-	uniqueName := fmt.Sprintf("%s-%s", workspace.Name, c.config.UniqueString)
-
-	if c.Enabled() {
-		role, err := c.ReconcileIAMRole(ctx, uniqueName, workspace.Status.Namespace)
-		if err != nil {
-			log.Error(err, "Failed to reconcile IAM role", "role", workspace.Name)
-			return err
-		}
-		workspace.Status.AWSRole = *role.RoleName
-		if _, err = c.ReconcileIAMRolePolicy(ctx, uniqueName, role); err != nil {
-			log.Error(err, "Failed to reconcile IAM role policy", "role", workspace.Name)
-			return err
-		}
-	}
-	return nil
-}
-
-func (c *AWSClient) DeleteChildResources(ctx context.Context, workspace *corev1alpha1.Workspace) error {
-	log := log.FromContext(ctx)
-	uniqueName := fmt.Sprintf("%s-%s", workspace.Name, c.config.UniqueString)
-
-	if c.Enabled() {
-		if err := c.DeleteIAMRolePolicy(ctx, uniqueName); err != nil {
-			log.Error(err, "Failed to delete IAM role policy", "role", uniqueName)
-			return err
-		}
-		if err := c.DeleteIAMRole(ctx, uniqueName); err != nil {
-			log.Error(err, "Failed to delete IAM role", "role", uniqueName)
-			return err
-		}
-	}
-	return nil
 }
