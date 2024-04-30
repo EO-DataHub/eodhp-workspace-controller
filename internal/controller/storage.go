@@ -12,30 +12,30 @@ import (
 )
 
 func (r *WorkspaceReconciler) ReconcilePersistentVolume(
-	ctx context.Context, name, namespace string, storage *corev1alpha1.StorageSpec,
+	ctx context.Context, storage *corev1alpha1.StorageSpec, namespace string,
 	csi *corev1.CSIPersistentVolumeSource) error {
 	log := log.FromContext(ctx)
 
 	pv := &corev1.PersistentVolume{}
 	if err := r.Get(ctx, client.ObjectKey{
-		Name:      name,
+		Name:      storage.PVCName,
 		Namespace: namespace}, pv); err == nil {
 		return nil // PersistentVolume already exists.
 	} else {
 		if errors.IsNotFound(err) {
 			// PersistentVolume does not exist.
 			log.Info("PersistentVolume for workspace does not exist",
-				"name", name, "namespace", namespace, "storage", storage)
+				"storage", storage, "namespace", namespace)
 			// Continue.
 		} else {
 			log.Error(err, "Failed to get PersistentVolume",
-				"name", name, "namespace", namespace, "storage", storage)
+				"storage", storage, "namespace", namespace)
 			return err
 		}
 	}
 
 	// Create block storage
-	pv.Name = name
+	pv.Name = storage.PVCName
 	pv.Namespace = namespace
 	pv.Spec.StorageClassName = storage.StorageClass
 	pv.Spec.AccessModes = []corev1.PersistentVolumeAccessMode{corev1.ReadWriteMany}
@@ -49,8 +49,7 @@ func (r *WorkspaceReconciler) ReconcilePersistentVolume(
 	pv.Spec.PersistentVolumeReclaimPolicy = corev1.PersistentVolumeReclaimRetain
 	pv.Spec.CSI = csi
 	if err := client.IgnoreAlreadyExists(r.Create(ctx, pv)); err == nil {
-		log.Info("PersistentVolume created", "name", name,
-			"namespace", namespace, "storage", storage)
+		log.Info("PersistentVolume created", "storage", storage, "namespace", namespace)
 		return nil
 	} else {
 		return err
@@ -85,32 +84,31 @@ func (r *WorkspaceReconciler) DeletePersistentVolume(
 }
 
 func (r *WorkspaceReconciler) ReconcilePersistentVolumeClaim(
-	ctx context.Context, name, namespace, pvName string,
-	storage *corev1alpha1.StorageSpec) error {
+	ctx context.Context, storage *corev1alpha1.StorageSpec, namespace string) error {
 
 	log := log.FromContext(ctx)
 
 	pvc := &corev1.PersistentVolumeClaim{}
 	if err := r.Get(ctx, client.ObjectKey{
-		Name:      name,
+		Name:      storage.PVCName,
 		Namespace: namespace}, pvc); err == nil {
 		return nil // PersistentVolumeClaim already exists.
 	} else {
 		if errors.IsNotFound(err) {
 			// PersistentVolumeClaim does not exist.
 			log.Info("PersistentVolumeClaim for workspace does not exist",
-				"name", name, "namespace", namespace, "storage", storage)
+				"storage", storage, "namespace", namespace)
 			// Continue.
 		} else {
 			log.Error(err, "Failed to get PersistentVolumeClaim",
-				"name", name, "namespace", namespace, "storage", storage)
+				"storage", storage, "namespace", namespace)
 			return err
 		}
 	}
 	// Create persistent volume claim
-	pvc.Name = name
+	pvc.Name = storage.PVCName
 	pvc.Namespace = namespace
-	pvc.Spec.VolumeName = pvName // this ensures we get the right PersistentVolume
+	pvc.Spec.VolumeName = storage.PVCName // this ensures we get the right PersistentVolume
 	pvc.Spec.StorageClassName = &storage.StorageClass
 	pvc.Spec.AccessModes = []corev1.PersistentVolumeAccessMode{corev1.ReadWriteMany}
 	pvc.Spec.Resources.Requests = corev1.ResourceList{
@@ -119,8 +117,8 @@ func (r *WorkspaceReconciler) ReconcilePersistentVolumeClaim(
 		),
 	}
 	if err := client.IgnoreAlreadyExists(r.Create(ctx, pvc)); err == nil {
-		log.Info("PersistentVolumeClaim created", "name", name,
-			"namespace", namespace, "storage", storage)
+		log.Info("PersistentVolumeClaim created", "storage", storage,
+			"namespace", namespace)
 		return nil
 	} else {
 		return err

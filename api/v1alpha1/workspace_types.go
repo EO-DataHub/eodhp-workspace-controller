@@ -24,12 +24,12 @@ import (
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
 type StorageSpec struct {
+	// Persistent volume claim name
+	PVCName string `json:"pvcName,omitempty"`
 	// Kubernetes storage class to use
 	StorageClass string `json:"storageClass,omitempty"`
-
 	// Size of the storage
 	Size string `json:"size,omitempty"`
-
 	// Define the EFS storage
 	AWSEFS AWSEFSSpec `json:"awsEFS,omitempty"`
 }
@@ -43,7 +43,11 @@ type WorkspaceSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Storage
+	// The username of the user
+	Username string `json:"username,omitempty"`
+	// Namespace to create for the workspace
+	Namespace string `json:"namespace,omitempty"`
+	// Storage parameters
 	Storage StorageSpec `json:"storage,omitempty"`
 }
 
@@ -53,9 +57,11 @@ type WorkspaceStatus struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// Name of child namespace
-	Namespace string        `json:"namespace,omitempty"`
-	AWSRole   string        `json:"awsRole,omitempty"`
-	Storage   StorageStatus `json:"storage,omitempty"`
+	Namespace string `json:"namespace,omitempty"`
+	// The AWS Role created for the user's workspace
+	AWSRole string `json:"awsRole,omitempty"`
+	// Storage parameters
+	Storage StorageStatus `json:"storage,omitempty"`
 }
 
 //+kubebuilder:object:root=true

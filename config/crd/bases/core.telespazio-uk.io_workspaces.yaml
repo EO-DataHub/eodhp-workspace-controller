@@ -39,8 +39,11 @@ spec:
           spec:
             description: WorkspaceSpec defines the desired state of Workspace
             properties:
+              namespace:
+                description: Namespace to create for the workspace
+                type: string
               storage:
-                description: Storage
+                description: Storage parameters
                 properties:
                   awsEFS:
                     description: Define the EFS storage
@@ -57,6 +60,9 @@ spec:
                       rootDirectory:
                         type: string
                     type: object
+                  pvcName:
+                    description: Persistent volume claim name
+                    type: string
                   size:
                     description: Size of the storage
                     type: string
@@ -64,16 +70,21 @@ spec:
                     description: Kubernetes storage class to use
                     type: string
                 type: object
+              username:
+                description: The username of the user
+                type: string
             type: object
           status:
             description: WorkspaceStatus defines the observed state of Workspace
             properties:
               awsRole:
+                description: The AWS Role created for the user's workspace
                 type: string
               namespace:
                 description: Name of child namespace
                 type: string
               storage:
+                description: Storage parameters
                 properties:
                   awsEFS:
                     properties:

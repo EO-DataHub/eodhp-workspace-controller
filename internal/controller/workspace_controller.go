@@ -94,7 +94,7 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	// Reconcile namespace
-	if namespace, err := r.ReconcileNamespace(ctx, workspace.Name); err == nil {
+	if namespace, err := r.ReconcileNamespace(ctx, workspace.Spec.Namespace); err == nil {
 		// Update workspace status with namespace name
 		workspace.Status.Namespace = namespace.Name
 		if err := r.Status().Update(ctx, workspace); err != nil {
@@ -107,10 +107,10 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	// Reconcile AWS resources
-	uniqueName := fmt.Sprintf("%s-%s", workspace.Name, r.config.ClusterName)
+	uniqueName := fmt.Sprintf("%s-%s", workspace.Spec.Username, r.config.ClusterName)
 	if r.aws.Enabled() {
 		// Reconcile IAM
-		role, err := r.aws.ReconcileIAMRole(ctx, uniqueName, workspace.Status.Namespace)
+		role, err := r.aws.ReconcileIAMRole(ctx, uniqueName, workspace.Spec.Namespace)
 		if err == nil {
 			workspace.Status.AWSRole = *role.RoleName
 			if err := r.Status().Update(ctx, workspace); err != nil {
@@ -118,10 +118,10 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 					"workspace.Status", workspace.Status, "role", *role.RoleName)
 			}
 		} else {
-			log.Error(err, "Failed to reconcile IAM role", "role", workspace.Name)
+			log.Error(err, "Failed to reconcile IAM role", "role", uniqueName)
 		}
 		if _, err = r.aws.ReconcileIAMRolePolicy(ctx, uniqueName, role); err != nil {
-			log.Error(err, "Failed to reconcile IAM role policy", "policy", workspace.Name)
+			log.Error(err, "Failed to reconcile IAM role policy", "policy", uniqueName)
 		}
 
 		// Reconcile EFS Access Points
@@ -141,9 +141,10 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	// Reconcile block storage
 	if workspace.Status.Storage.AWSEFS.AccessPointID != "" {
-		if err := r.ReconcilePersistentVolume(ctx, workspace.Name,
-			workspace.Status.Namespace,
+		// AWS EFS access point has been created
+		if err := r.ReconcilePersistentVolume(ctx,
 			&workspace.Spec.Storage,
+			workspace.Spec.Namespace,
 			&(corev1.CSIPersistentVolumeSource{
 				Driver: "efs.csi.aws.com",
 				VolumeHandle: fmt.Sprintf(
@@ -155,9 +156,8 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			})); err != nil {
 			log.Error(err, "Failed to reconcile PersistentVolume", "name", workspace.Name)
 		}
-		if err := r.ReconcilePersistentVolumeClaim(ctx, workspace.Name,
-			workspace.Status.Namespace, workspace.Name, &workspace.Spec.Storage,
-		); err != nil {
+		if err := r.ReconcilePersistentVolumeClaim(ctx, &workspace.Spec.Storage,
+			workspace.Status.Namespace); err != nil {
 			log.Error(err, "Failed to reconcile PersistentVolumeClaim",
 				"name", workspace.Name, "namespace", workspace.Status.Namespace)
 		}
@@ -215,13 +215,13 @@ func (r *WorkspaceReconciler) DeleteChildResources(
 
 	log := log.FromContext(ctx)
 	// Delete Kubernetes resources.
-	r.DeletePersistentVolumeClaim(ctx, workspace.Name, workspace.Status.Namespace)
-	r.DeletePersistentVolume(ctx, workspace.Name, workspace.Status.Namespace)
-	r.DeleteNamespace(ctx, workspace.Name)
+	r.DeletePersistentVolumeClaim(ctx, workspace.Spec.Storage.PVCName, workspace.Status.Namespace)
+	r.DeletePersistentVolume(ctx, workspace.Spec.Storage.PVCName, workspace.Status.Namespace)
+	r.DeleteNamespace(ctx, workspace.Spec.Namespace)
 
 	// Delete AWS resources
 	if r.aws.Enabled() {
-		uniqueName := fmt.Sprintf("%s-%s", workspace.Name, r.config.ClusterName)
+		uniqueName := fmt.Sprintf("%s-%s", workspace.Spec.Username, r.config.ClusterName)
 		if err := r.aws.DeleteIAMRolePolicy(ctx, uniqueName); err != nil {
 			log.Error(err, "Failed to delete IAM role policy", "role", uniqueName)
 		}
