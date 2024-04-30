@@ -141,7 +141,7 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	// Reconcile block storage
 	if workspace.Status.Storage.AWSEFS.AccessPointID != "" {
-		if err := r.ReconcileBlockStorage(ctx, workspace.Name,
+		if err := r.ReconcilePersistentVolume(ctx, workspace.Name,
 			workspace.Status.Namespace,
 			&workspace.Spec.Storage,
 			&(corev1.CSIPersistentVolumeSource{
@@ -153,7 +153,13 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 					workspace.Status.Storage.AWSEFS.AccessPointID,
 				),
 			})); err != nil {
-			return ctrl.Result{}, err
+			log.Error(err, "Failed to reconcile PersistentVolume", "name", workspace.Name)
+		}
+		if err := r.ReconcilePersistentVolumeClaim(ctx, workspace.Name,
+			workspace.Status.Namespace, workspace.Name, &workspace.Spec.Storage,
+		); err != nil {
+			log.Error(err, "Failed to reconcile PersistentVolumeClaim",
+				"name", workspace.Name, "namespace", workspace.Status.Namespace)
 		}
 	}
 
@@ -209,7 +215,8 @@ func (r *WorkspaceReconciler) DeleteChildResources(
 
 	log := log.FromContext(ctx)
 	// Delete Kubernetes resources.
-	r.DeleteBlockStorage(ctx, workspace.Name, workspace.Status.Namespace)
+	r.DeletePersistentVolumeClaim(ctx, workspace.Name, workspace.Status.Namespace)
+	r.DeletePersistentVolume(ctx, workspace.Name, workspace.Status.Namespace)
 	r.DeleteNamespace(ctx, workspace.Name)
 
 	// Delete AWS resources
