@@ -9,3 +9,5 @@ spec:
   storage:
     storageClass: file-storage
     size: 2.5Gi
+    awsEFS:
+      rootDirectory: /workspaces/sample-workspace

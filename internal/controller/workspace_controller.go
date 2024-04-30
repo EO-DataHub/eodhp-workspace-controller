@@ -210,12 +210,7 @@ func (r *WorkspaceReconciler) DeleteChildResources(
 	log := log.FromContext(ctx)
 	// Delete Kubernetes resources.
 	r.DeleteBlockStorage(ctx, workspace.Name, workspace.Status.Namespace)
-	if err := r.DeleteNamespace(ctx, workspace.Name); err == nil {
-		workspace.Status.Namespace = ""
-		if err := r.Status().Update(ctx, workspace); err != nil {
-			log.Error(err, "Failed to update namespace in workspace status", "workspace", workspace)
-		}
-	}
+	r.DeleteNamespace(ctx, workspace.Name)
 
 	// Delete AWS resources
 	if r.aws.Enabled() {
