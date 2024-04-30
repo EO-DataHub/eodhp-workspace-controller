@@ -1,95 +1,16 @@
-/*
-Copyright 2024 Telespazio UK.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
-package controller
+package aws
 
 import (
 	"context"
-	"fmt"
+	"html/template"
 	"os"
 	"strings"
 
-	"text/template"
-
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/iam"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-
-	corev1alpha1 "github.com/UKEODHP/workspace-controller/api/v1alpha1"
 )
-
-type AWSConfig struct {
-	AccountID string `yaml:"accountID"`
-	Region    string `yaml:"region"`
-	Auth      struct {
-		AccessKey string `yaml:"accessKey"`
-		SecretKey string `yaml:"secretKey"`
-	} `yaml:"auth"`
-	OIDC struct {
-		Provider string `yaml:"provider"`
-	}
-	Storage struct {
-		EFSID string `yaml:"efsID"`
-	}
-	UniqueString string `yaml:"uniqueString"`
-}
-
-type AWSClient struct {
-	config AWSConfig
-	sess   *session.Session
-}
-
-func (c *AWSClient) Initialise(config AWSConfig) error {
-	c.config = config
-
-	// Create a new session.
-	if sess, err := session.NewSession(&aws.Config{
-		Region: aws.String(config.Region),
-	}); err == nil {
-		c.sess = sess
-		return nil
-	} else {
-		fmt.Println("Error creating AWS session ", err)
-		return err
-	}
-}
-
-func (c *AWSClient) Enabled() bool {
-	return c.sess != nil
-}
-
-func (c *AWSClient) Reconcile(ctx context.Context, workspace *corev1alpha1.Workspace) error {
-	log := log.FromContext(ctx)
-	uniqueName := fmt.Sprintf("%s-%s", workspace.Name, c.config.UniqueString)
-
-	if c.Enabled() {
-		role, err := c.ReconcileIAMRole(ctx, uniqueName, workspace.Status.Namespace)
-		if err != nil {
-			log.Error(err, "Failed to reconcile IAM role", "role", workspace.Name)
-			return err
-		}
-		if _, err = c.ReconcileIAMRolePolicy(ctx, uniqueName, role); err != nil {
-			log.Error(err, "Failed to reconcile IAM role policy", "role", workspace.Name)
-			return err
-		}
-	}
-	return nil
-}
 
 func (c *AWSClient) ReconcileIAMUser(username string) (*iam.User, error) {
 	iam_ := iam.New(c.sess)
@@ -168,6 +89,29 @@ func (c *AWSClient) ReconcileIAMRole(ctx context.Context, roleName, namespace st
 	}
 }
 
+func (c *AWSClient) DeleteIAMRole(ctx context.Context, roleName string) error {
+	log := log.FromContext(ctx)
+
+	iam_ := iam.New(c.sess)
+
+	if _, err := iam_.DeleteRole(&iam.DeleteRoleInput{
+		RoleName: &roleName,
+	}); err == nil {
+		log.Info("Role deleted", "role", roleName)
+		return nil
+	} else if aerr, ok := err.(awserr.Error); ok {
+		if aerr.Code() == iam.ErrCodeNoSuchEntityException {
+			// Role does not exist. Continue.
+			log.Info("Role does not exist", "role", roleName)
+		} else {
+			return err
+		}
+	} else {
+		return err
+	}
+	return nil
+}
+
 func (c *AWSClient) ReconcileIAMRolePolicy(ctx context.Context, policyName string, role *iam.Role) (*string, error) {
 	log := log.FromContext(ctx)
 
@@ -216,46 +160,6 @@ func (c *AWSClient) ReconcileIAMRolePolicy(ctx context.Context, policyName strin
 	} else {
 		return nil, err
 	}
-}
-
-func (c *AWSClient) DeleteChildResources(ctx context.Context, workspace *corev1alpha1.Workspace) error {
-	log := log.FromContext(ctx)
-	uniqueName := fmt.Sprintf("%s-%s", workspace.Name, c.config.UniqueString)
-
-	if c.Enabled() {
-		if err := c.DeleteIAMRolePolicy(ctx, uniqueName); err != nil {
-			log.Error(err, "Failed to delete IAM role policy", "role", uniqueName)
-			return err
-		}
-		if err := c.DeleteIAMRole(ctx, uniqueName); err != nil {
-			log.Error(err, "Failed to delete IAM role", "role", uniqueName)
-			return err
-		}
-	}
-	return nil
-}
-
-func (c *AWSClient) DeleteIAMRole(ctx context.Context, roleName string) error {
-	log := log.FromContext(ctx)
-
-	iam_ := iam.New(c.sess)
-
-	if _, err := iam_.DeleteRole(&iam.DeleteRoleInput{
-		RoleName: &roleName,
-	}); err == nil {
-		log.Info("Role deleted", "role", roleName)
-		return nil
-	} else if aerr, ok := err.(awserr.Error); ok {
-		if aerr.Code() == iam.ErrCodeNoSuchEntityException {
-			// Role does not exist. Continue.
-			log.Info("Role does not exist", "role", roleName)
-		} else {
-			return err
-		}
-	} else {
-		return err
-	}
-	return nil
 }
 
 func (c *AWSClient) DeleteIAMRolePolicy(ctx context.Context, policyName string) error {

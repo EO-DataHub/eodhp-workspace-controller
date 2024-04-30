@@ -47,6 +47,7 @@ type WorkspaceStatus struct {
 
 	// Name of child namespace
 	Namespace string `json:"namespace,omitempty"`
+	AWSRole string `json:"awsRole,omitempty"`
 }
 
 //+kubebuilder:object:root=true
