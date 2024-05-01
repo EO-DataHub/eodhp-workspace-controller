@@ -250,7 +250,7 @@ func (c *Config) Load(path string) error {
 	}
 
 	if err := yaml.Unmarshal(data, c); err != nil {
-		log.Log.Error(err, "Problem unmarshaling config file")
+		log.Log.Error(err, "Problem unmarshalling config file")
 		return err
 	}
 
