@@ -192,7 +192,7 @@ func (r *WorkspaceReconciler) ReconcileFinalizer(ctx context.Context, workspace 
 	} else {
 		// The object is being deleted
 		if controllerutil.ContainsFinalizer(workspace, finalizer) {
-			// Our finalizer is present, so lets handle any external dependency
+			// Our finalizer is present, so let's handle any external dependency
 			if err := r.DeleteChildResources(ctx, workspace); err != nil {
 				// If we fail to delete the external resource, we need to requeue the item
 				return false, err
