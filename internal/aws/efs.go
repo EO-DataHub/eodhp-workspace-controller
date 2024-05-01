@@ -44,23 +44,12 @@ func (c *AWSClient) ReconcileEFSAccessPoint(ctx context.Context, efsID string,
 
 	// Access point not found, create a new one
 	// Define the parameters for the access point
-	var uid, gid int64
-	if awsEFS.PosixUser.UID == 0 {
-		uid = 1000
-	} else {
-		uid = awsEFS.PosixUser.UID
-	}
-	if awsEFS.PosixUser.GID == 0 {
-		gid = 1000
-	} else {
-		gid = awsEFS.PosixUser.GID
-	}
 	accessPointParams := &efs.CreateAccessPointInput{
 		ClientToken:  aws.String(uuid.New().String()),
 		FileSystemId: aws.String(efsID),
 		PosixUser: &efs.PosixUser{
-			Uid: aws.Int64(uid),
-			Gid: aws.Int64(gid),
+			Uid: aws.Int64(awsEFS.PosixUser.UID),
+			Gid: aws.Int64(awsEFS.PosixUser.GID),
 		},
 		RootDirectory: &efs.RootDirectory{
 			Path: aws.String(awsEFS.RootDirectory),
