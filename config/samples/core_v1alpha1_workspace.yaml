@@ -4,13 +4,13 @@ metadata:
   labels:
     app.kubernetes.io/name: workspace-operator
     app.kubernetes.io/managed-by: kustomize
-  name: steven
+  name: test
 spec:
-  username: steven
-  namespace: ws-steven
+  username: test
+  namespace: ws-test
   storage:
-    pvcName: pvc-steven
+    pvcName: pvc-test
     storageClass: file-storage
-    size: 2.5Gi
+    size: 1Gi
     awsEFS:
-      rootDirectory: /workspaces/sample-workspace
+      rootDirectory: /workspaces/test
