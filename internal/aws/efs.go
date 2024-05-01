@@ -53,6 +53,11 @@ func (c *AWSClient) ReconcileEFSAccessPoint(ctx context.Context, efsID string,
 		},
 		RootDirectory: &efs.RootDirectory{
 			Path: aws.String(awsEFS.RootDirectory),
+			CreationInfo: &efs.CreationInfo{
+				OwnerUid:    aws.Int64(awsEFS.PosixUser.UID),
+				OwnerGid:    aws.Int64(awsEFS.PosixUser.GID),
+				Permissions: aws.String("0o755"),
+			},
 		},
 	}
 
