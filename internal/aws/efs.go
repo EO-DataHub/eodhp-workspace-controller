@@ -79,6 +79,8 @@ func (c *AWSClient) ReconcileEFSAccessPoint(ctx context.Context, efsID string,
 func (c *AWSClient) DeleteEFSAccessPoint(ctx context.Context,
 	accessPointID string) error {
 
+	log := log.FromContext(ctx)
+
 	// Create a new EFS service client
 	svc := efs.New(c.sess)
 
@@ -86,8 +88,9 @@ func (c *AWSClient) DeleteEFSAccessPoint(ctx context.Context,
 	deleteAccessPointParams := &efs.DeleteAccessPointInput{
 		AccessPointId: aws.String(accessPointID),
 	}
-	_, err := svc.DeleteAccessPoint(deleteAccessPointParams)
-	if err != nil {
+
+	if _, err := svc.DeleteAccessPoint(deleteAccessPointParams); err == nil {
+		log.Info("Deleted EFS access point", "access point ID", accessPointID)
 		return err
 	}
 

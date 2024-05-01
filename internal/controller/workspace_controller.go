@@ -215,6 +215,7 @@ func (r *WorkspaceReconciler) DeleteChildResources(
 
 	log := log.FromContext(ctx)
 	// Delete Kubernetes resources.
+
 	r.DeletePersistentVolumeClaim(ctx, workspace.Spec.Storage.PVCName, workspace.Status.Namespace)
 	r.DeletePersistentVolume(ctx, workspace.Spec.Storage.PVCName, workspace.Status.Namespace)
 	r.DeleteNamespace(ctx, workspace.Spec.Namespace)
@@ -222,6 +223,13 @@ func (r *WorkspaceReconciler) DeleteChildResources(
 	// Delete AWS resources
 	if r.aws.Enabled() {
 		uniqueName := fmt.Sprintf("%s-%s", workspace.Spec.Username, r.config.ClusterName)
+		if workspace.Status.Storage.AWSEFS.AccessPointID != "" {
+			if err := r.aws.DeleteEFSAccessPoint(ctx,
+				workspace.Status.Storage.AWSEFS.AccessPointID); err != nil {
+				log.Error(err, "Failed to delete EFS access point",
+					"access point", workspace.Status.Storage.AWSEFS.AccessPointID)
+			}
+		}
 		if err := r.aws.DeleteIAMRolePolicy(ctx, uniqueName); err != nil {
 			log.Error(err, "Failed to delete IAM role policy", "role", uniqueName)
 		}
