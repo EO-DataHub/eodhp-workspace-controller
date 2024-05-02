@@ -23,6 +23,7 @@ import (
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
+
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -57,6 +58,7 @@ func main() {
 	var probeAddr string
 	var secureMetrics bool
 	var enableHTTP2 bool
+	var configPath string
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
@@ -69,6 +71,7 @@ func main() {
 	opts := zap.Options{
 		Development: true,
 	}
+	flag.StringVar(&configPath, "config", "", "Path to config file.")
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
 
@@ -93,6 +96,19 @@ func main() {
 	webhookServer := webhook.NewServer(webhook.Options{
 		TLSOpts: tlsOpts,
 	})
+
+	var c controller.Config
+	if configPath != "" {
+		if err := c.Load(configPath); err != nil {
+			setupLog.Error(err, "Problem loading config file")
+			os.Exit(1)
+		} else {
+			setupLog.Info("Config loaded successfully", "config", configPath)
+
+		}
+	} else {
+		setupLog.Info("No config file provided. Use --config flag to provide a path to a config file.")
+	}
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme: scheme,
@@ -122,10 +138,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controller.WorkspaceReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
+	if err = controller.NewWorkspaceReconciler(
+		mgr.GetClient(), mgr.GetScheme(), c,
+	).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Workspace")
 		os.Exit(1)
 	}

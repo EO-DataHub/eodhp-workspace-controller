@@ -18,11 +18,13 @@ package controller
 
 import (
 	"context"
+	"fmt"
+	"os"
 
 	corev1alpha1 "github.com/UKEODHP/workspace-controller/api/v1alpha1"
+	"github.com/UKEODHP/workspace-controller/internal/aws"
+	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -34,12 +36,36 @@ import (
 type WorkspaceReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+	config Config
+	aws    aws.AWSClient
+}
+
+func NewWorkspaceReconciler(client client.Client, scheme *runtime.Scheme,
+	config Config) *WorkspaceReconciler {
+
+	aws := aws.AWSClient{}
+	if config.AWS.Region != "" {
+		log.Log.Info("AWS region set. AWS support enabled.", "region", config.AWS.Region)
+		if err := aws.Initialise(config.AWS); err != nil {
+			log.Log.Error(err, "Problem initialising AWS client")
+		}
+	} else {
+		log.Log.Info("No AWS region set. AWS support disabled.")
+	}
+
+	return &WorkspaceReconciler{
+		Client: client,
+		Scheme: scheme,
+		config: config,
+		aws:    aws,
+	}
 }
 
 //+kubebuilder:rbac:groups=core.telespazio-uk.io,resources=workspaces,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core.telespazio-uk.io,resources=workspaces/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=core.telespazio-uk.io,resources=workspaces/finalizers,verbs=update
-// +kubebuilder:rbac:groups=core,resources=namespaces,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=core,resources=namespaces,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=core,resources=persistentvolume,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -51,6 +77,8 @@ type WorkspaceReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.17.2/pkg/reconcile
 func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	log := log.FromContext(ctx)
+
 	// Get a reference to the workspace that has been updated
 	workspace := &corev1alpha1.Workspace{}
 	if err := r.Get(ctx, req.NamespacedName, workspace); err != nil {
@@ -66,8 +94,73 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	// Reconcile namespace
-	if err := r.ReconcileNamespace(ctx, workspace); err != nil {
+	if namespace, err := r.ReconcileNamespace(ctx, workspace.Spec.Namespace); err == nil {
+		// Update workspace status with namespace name
+		workspace.Status.Namespace = namespace.Name
+		if err := r.Status().Update(ctx, workspace); err != nil {
+			log.Error(err, "Failed to update namespace in workspace status",
+				"workspace.Status", workspace.Status)
+		}
+		// continue with reconciliation
+	} else {
 		return ctrl.Result{}, err
+	}
+
+	// Reconcile AWS resources
+	uniqueName := fmt.Sprintf("%s-%s", workspace.Spec.Username, r.config.ClusterName)
+	if r.aws.Enabled() {
+		// Reconcile IAM
+		role, err := r.aws.ReconcileIAMRole(ctx, uniqueName, workspace.Spec.Namespace)
+		if err == nil {
+			workspace.Status.AWSRole = *role.RoleName
+			if err := r.Status().Update(ctx, workspace); err != nil {
+				log.Error(err, "Failed to update role name in workspace status",
+					"workspace.Status", workspace.Status, "role", *role.RoleName)
+			}
+		} else {
+			log.Error(err, "Failed to reconcile IAM role", "role", uniqueName)
+		}
+		if _, err = r.aws.ReconcileIAMRolePolicy(ctx, uniqueName, role); err != nil {
+			log.Error(err, "Failed to reconcile IAM role policy", "policy", uniqueName)
+		}
+
+		// Reconcile EFS Access Points
+		if apID, err := r.aws.ReconcileEFSAccessPoint(ctx, r.config.AWS.Storage.EFSID,
+			&workspace.Spec.Storage.AWSEFS); err == nil {
+
+			workspace.Status.Storage.AWSEFS.AccessPointID = *apID
+			if err := r.Status().Update(ctx, workspace); err != nil {
+				log.Error(err, "Failed to update EFS Access Point ID in workspace status",
+					"workspace.Status", workspace.Status, "EFS Access Point ID", *apID)
+			}
+		} else {
+			log.Error(err, "Failed to reconcile EFS access point",
+				"access point", workspace.Spec.Storage.AWSEFS)
+		}
+	}
+
+	// Reconcile block storage
+	if workspace.Status.Storage.AWSEFS.AccessPointID != "" {
+		// AWS EFS access point has been created
+		if err := r.ReconcilePersistentVolume(ctx,
+			&workspace.Spec.Storage,
+			workspace.Spec.Namespace,
+			&(corev1.CSIPersistentVolumeSource{
+				Driver: "efs.csi.aws.com",
+				VolumeHandle: fmt.Sprintf(
+					"%s:%s:%s",
+					r.config.AWS.Storage.EFSID,
+					workspace.Spec.Storage.AWSEFS.RootDirectory,
+					workspace.Status.Storage.AWSEFS.AccessPointID,
+				),
+			})); err != nil {
+			log.Error(err, "Failed to reconcile PersistentVolume", "name", workspace.Name)
+		}
+		if err := r.ReconcilePersistentVolumeClaim(ctx, &workspace.Spec.Storage,
+			workspace.Status.Namespace); err != nil {
+			log.Error(err, "Failed to reconcile PersistentVolumeClaim",
+				"name", workspace.Name, "namespace", workspace.Status.Namespace)
+		}
 	}
 
 	return ctrl.Result{}, nil
@@ -99,8 +192,8 @@ func (r *WorkspaceReconciler) ReconcileFinalizer(ctx context.Context, workspace 
 	} else {
 		// The object is being deleted
 		if controllerutil.ContainsFinalizer(workspace, finalizer) {
-			// Our finalizer is present, so lets handle any external dependency
-			if err := r.deleteChildResources(ctx, workspace); err != nil {
+			// Our finalizer is present, so let's handle any external dependency
+			if err := r.DeleteChildResources(ctx, workspace); err != nil {
 				// If we fail to delete the external resource, we need to requeue the item
 				return false, err
 			}
@@ -117,60 +210,56 @@ func (r *WorkspaceReconciler) ReconcileFinalizer(ctx context.Context, workspace 
 }
 
 // Delete any child resources of the object.
-func (r *WorkspaceReconciler) deleteChildResources(
+func (r *WorkspaceReconciler) DeleteChildResources(
 	ctx context.Context, workspace *corev1alpha1.Workspace) error {
 
 	log := log.FromContext(ctx)
+	// Delete Kubernetes resources.
 
-	// Delete namespace
-	var namespace corev1.Namespace
-	if err := client.IgnoreNotFound(
-		r.Get(ctx, client.ObjectKey{Name: workspace.Status.Namespace}, &namespace)); err == nil {
+	r.DeletePersistentVolumeClaim(ctx, workspace.Spec.Storage.PVCName, workspace.Status.Namespace)
+	r.DeletePersistentVolume(ctx, workspace.Spec.Storage.PVCName, workspace.Status.Namespace)
+	r.DeleteNamespace(ctx, workspace.Spec.Namespace)
 
-		if err := r.Delete(ctx, &namespace); err != nil {
-			log.Error(err, "Failed to delete namespace", "namespace", workspace.Status.Namespace)
-			return err
-		} else {
-			log.Info("Namespace deleted", "namespace", workspace.Status.Namespace)
+	// Delete AWS resources
+	if r.aws.Enabled() {
+		uniqueName := fmt.Sprintf("%s-%s", workspace.Spec.Username, r.config.ClusterName)
+		if workspace.Status.Storage.AWSEFS.AccessPointID != "" {
+			if err := r.aws.DeleteEFSAccessPoint(ctx,
+				workspace.Status.Storage.AWSEFS.AccessPointID); err != nil {
+				log.Error(err, "Failed to delete EFS access point",
+					"access point", workspace.Status.Storage.AWSEFS.AccessPointID)
+			}
+		}
+		if err := r.aws.DeleteIAMRolePolicy(ctx, uniqueName); err != nil {
+			log.Error(err, "Failed to delete IAM role policy", "role", uniqueName)
+		}
+		if err := r.aws.DeleteIAMRole(ctx, uniqueName); err != nil {
+			log.Error(err, "Failed to delete IAM role", "role", uniqueName)
 		}
 	}
 
 	return nil
 }
 
-// Create the workspace namespace if it does not already exist and update the
-// workspace status with the namespace name.
-func (r *WorkspaceReconciler) ReconcileNamespace(
-	ctx context.Context, workspace *corev1alpha1.Workspace) error {
-	log := log.FromContext(ctx)
+type Config struct {
+	AWS         aws.AWSConfig `yaml:"aws"`
+	ClusterName string        `yaml:"clusterName"`
+	Storage     struct {
+		StorageClass string `yaml:"storageClass"`
+		DefaultSize  string `yaml:"defaultSize"`
+	} `yaml:"storage"`
+}
 
-	// Create workspace namespace if it does not already exist.
-	var namespace corev1.Namespace
-	if err := r.Get(ctx, client.ObjectKey{Name: workspace.Name}, &namespace); err != nil {
-		if errors.IsNotFound(err) {
-			// Namespace does not exist
-			log.Info("Namespace for workspace does not exist", "namespace", workspace.Name)
-
-			// Create namespace
-			namespace = corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{Name: workspace.Name},
-				Spec:       corev1.NamespaceSpec{},
-			}
-			err = client.IgnoreAlreadyExists(r.Create(ctx, &namespace))
-			if err == nil {
-				log.Info("Namespace created", "name", workspace.Name)
-			}
-		} else {
-			log.Error(err, "Failed to get namespace", "namespace", workspace.Name)
-			return err
-		}
+func (c *Config) Load(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		log.Log.Error(err, "Problem reading config file")
+		return err
 	}
 
-	// Update workspace status with namespace name
-	workspace.Status.Namespace = namespace.Name
-	if err := r.Status().Update(ctx, workspace); err != nil {
-		log.Error(err, "Failed to update workspace status",
-			"workspace.Status", workspace.Status)
+	if err := yaml.Unmarshal(data, c); err != nil {
+		log.Log.Error(err, "Problem unmarshalling config file")
+		return err
 	}
 
 	return nil

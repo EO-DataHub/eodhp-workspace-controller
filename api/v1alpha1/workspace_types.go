@@ -23,10 +23,32 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
+type StorageSpec struct {
+	// Persistent volume claim name
+	PVCName string `json:"pvcName,omitempty"`
+	// Kubernetes storage class to use
+	StorageClass string `json:"storageClass,omitempty"`
+	// Size of the storage
+	Size string `json:"size,omitempty"`
+	// Define the EFS storage
+	AWSEFS AWSEFSSpec `json:"awsEFS,omitempty"`
+}
+
+type StorageStatus struct {
+	AWSEFS AWSEFSStatus `json:"awsEFS,omitempty"`
+}
+
 // WorkspaceSpec defines the desired state of Workspace
 type WorkspaceSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+
+	// The username of the user
+	Username string `json:"username,omitempty"`
+	// Namespace to create for the workspace
+	Namespace string `json:"namespace,omitempty"`
+	// Storage parameters
+	Storage StorageSpec `json:"storage,omitempty"`
 }
 
 // WorkspaceStatus defines the observed state of Workspace
@@ -36,6 +58,10 @@ type WorkspaceStatus struct {
 
 	// Name of child namespace
 	Namespace string `json:"namespace,omitempty"`
+	// The AWS Role created for the user's workspace
+	AWSRole string `json:"awsRole,omitempty"`
+	// Storage parameters
+	Storage StorageStatus `json:"storage,omitempty"`
 }
 
 //+kubebuilder:object:root=true
