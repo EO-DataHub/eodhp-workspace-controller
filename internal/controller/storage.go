@@ -18,7 +18,7 @@ func (r *WorkspaceReconciler) ReconcilePersistentVolume(
 
 	pv := &corev1.PersistentVolume{}
 	if err := r.Get(ctx, client.ObjectKey{
-		Name:      storage.PVCName,
+		Name:      storage.PVName,
 		Namespace: namespace}, pv); err == nil {
 		return nil // PersistentVolume already exists.
 	} else {
@@ -35,7 +35,7 @@ func (r *WorkspaceReconciler) ReconcilePersistentVolume(
 	}
 
 	// Create block storage
-	pv.Name = storage.PVCName
+	pv.Name = storage.PVName
 	pv.Namespace = namespace
 	pv.Spec.StorageClassName = storage.StorageClass
 	pv.Spec.AccessModes = []corev1.PersistentVolumeAccessMode{corev1.ReadWriteMany}
@@ -108,7 +108,7 @@ func (r *WorkspaceReconciler) ReconcilePersistentVolumeClaim(
 	// Create persistent volume claim
 	pvc.Name = storage.PVCName
 	pvc.Namespace = namespace
-	pvc.Spec.VolumeName = storage.PVCName // this ensures we get the right PersistentVolume
+	pvc.Spec.VolumeName = storage.PVName // this ensures we get the right PersistentVolume
 	pvc.Spec.StorageClassName = &storage.StorageClass
 	pvc.Spec.AccessModes = []corev1.PersistentVolumeAccessMode{corev1.ReadWriteMany}
 	pvc.Spec.Resources.Requests = corev1.ResourceList{

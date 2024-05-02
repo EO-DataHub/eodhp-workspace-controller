@@ -216,8 +216,9 @@ func (r *WorkspaceReconciler) DeleteChildResources(
 	log := log.FromContext(ctx)
 	// Delete Kubernetes resources.
 
-	r.DeletePersistentVolumeClaim(ctx, workspace.Spec.Storage.PVCName, workspace.Status.Namespace)
-	r.DeletePersistentVolume(ctx, workspace.Spec.Storage.PVCName, workspace.Status.Namespace)
+	r.DeletePersistentVolumeClaim(ctx, workspace.Spec.Storage.PVCName, workspace.Spec.Namespace)
+	r.DeletePersistentVolume(ctx, workspace.Spec.Storage.PVCName, workspace.Spec.Namespace)
+	r.DeleteServiceAccount(ctx, workspace.Spec.ServiceAccount.Name, workspace.Spec.Namespace)
 	r.DeleteNamespace(ctx, workspace.Spec.Namespace)
 
 	// Delete AWS resources

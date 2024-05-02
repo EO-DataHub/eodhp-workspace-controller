@@ -42,13 +42,26 @@ spec:
               namespace:
                 description: Namespace to create for the workspace
                 type: string
+              serviceAccount:
+                description: Service account
+                properties:
+                  annotations:
+                    additionalProperties:
+                      type: string
+                    description: Service account annotations
+                    type: object
+                  name:
+                    type: string
+                type: object
               storage:
                 description: Storage parameters
                 properties:
                   awsEFS:
                     description: Define the EFS storage
                     properties:
-                      posixUser:
+                      rootDirectory:
+                        type: string
+                      user:
                         properties:
                           gid:
                             format: int64
@@ -57,9 +70,10 @@ spec:
                             format: int64
                             type: integer
                         type: object
-                      rootDirectory:
-                        type: string
                     type: object
+                  pvName:
+                    description: Persistent volume claim name
+                    type: string
                   pvcName:
                     description: Persistent volume claim name
                     type: string
