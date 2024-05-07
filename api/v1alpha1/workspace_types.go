@@ -25,6 +25,8 @@ import (
 
 type StorageSpec struct {
 	// Persistent volume claim name
+	PVName string `json:"pvName,omitempty"`
+	// Persistent volume claim name
 	PVCName string `json:"pvcName,omitempty"`
 	// Kubernetes storage class to use
 	StorageClass string `json:"storageClass,omitempty"`
@@ -38,6 +40,12 @@ type StorageStatus struct {
 	AWSEFS AWSEFSStatus `json:"awsEFS,omitempty"`
 }
 
+type ServiceAccountSpec struct {
+	Name string `json:"name,omitempty"`
+	// Service account annotations
+	Annotations map[string]string `json:"annotations,omitempty"`
+}
+
 // WorkspaceSpec defines the desired state of Workspace
 type WorkspaceSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
@@ -49,6 +57,8 @@ type WorkspaceSpec struct {
 	Namespace string `json:"namespace,omitempty"`
 	// Storage parameters
 	Storage StorageSpec `json:"storage,omitempty"`
+	// Service account
+	ServiceAccount ServiceAccountSpec `json:"serviceAccount,omitempty"`
 }
 
 // WorkspaceStatus defines the observed state of Workspace

@@ -6,7 +6,7 @@ type PosixUser struct {
 }
 type AWSEFSSpec struct {
 	RootDirectory string    `json:"rootDirectory,omitempty"`
-	PosixUser     PosixUser `json:"posixUser,omitempty"`
+	PosixUser     PosixUser `json:"user,omitempty"`
 }
 
 type AWSEFSStatus struct {

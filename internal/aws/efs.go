@@ -56,13 +56,14 @@ func (c *AWSClient) ReconcileEFSAccessPoint(ctx context.Context, efsID string,
 			CreationInfo: &efs.CreationInfo{
 				OwnerUid:    aws.Int64(awsEFS.PosixUser.UID),
 				OwnerGid:    aws.Int64(awsEFS.PosixUser.GID),
-				Permissions: aws.String("0o755"),
+				Permissions: aws.String("755"),
 			},
 		},
 	}
 
 	// Create the access point
 	if ap, err := svc.CreateAccessPoint(accessPointParams); err == nil {
+		log.Info("Created EFS access point", "access point", accessPointParams)
 		return ap.AccessPointId, nil
 	} else {
 		log.Error(err, "Failed to create EFS access point", "access point", accessPointParams)

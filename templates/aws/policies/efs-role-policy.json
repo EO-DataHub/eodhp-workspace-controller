@@ -5,7 +5,8 @@
         "elasticfilesystem:DescribeAccessPoints",
         "elasticfilesystem:CreateAccessPoint",
         "elasticfilesystem:DeleteAccessPoint",
-        "elasticfilesystem:TagResource"
+        "elasticfilesystem:TagResource",
+        "elasticfilesystem:DescribeMountTargets"
       ],
       "Effect": "Allow",
       "Resource": "arn:aws:elasticfilesystem:eu-west-2:{{.accountID}}:file-system/{{.efsID}}"
