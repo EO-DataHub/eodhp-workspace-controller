@@ -139,6 +139,27 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 	}
 
+	// Reconcile service account
+	if workspace.Status.AWSRole != "" {
+		// Check annotations have been initialised
+		var annotations map[string]string
+		if workspace.Spec.ServiceAccount.Annotations == nil {
+			annotations = make(map[string]string, 10)
+		} else {
+			annotations = workspace.Spec.ServiceAccount.Annotations
+		}
+		// Append role ARN to service account annotations
+		annotations["eks.amazonaws.com/role-arn"] = fmt.Sprintf("arn:aws:iam::%s:role/%s",
+			r.config.AWS.AccountID, workspace.Status.AWSRole)
+	}
+	if err := r.ReconcileServiceAccount(ctx, workspace.Spec.ServiceAccount.Name,
+		workspace.Spec.Namespace, workspace.Spec.ServiceAccount.Annotations); err != nil {
+		log.Error(err, "Failed to reconcile ServiceAccount",
+			"name", workspace.Spec.ServiceAccount.Name,
+			"namespace", workspace.Spec.Namespace,
+		)
+	}
+
 	// Reconcile block storage
 	if workspace.Status.Storage.AWSEFS.AccessPointID != "" {
 		// AWS EFS access point has been created
