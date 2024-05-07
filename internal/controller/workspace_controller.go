@@ -169,9 +169,8 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			&(corev1.CSIPersistentVolumeSource{
 				Driver: "efs.csi.aws.com",
 				VolumeHandle: fmt.Sprintf(
-					"%s:%s:%s",
+					"%s::%s",
 					r.config.AWS.Storage.EFSID,
-					workspace.Spec.Storage.AWSEFS.RootDirectory,
 					workspace.Status.Storage.AWSEFS.AccessPointID,
 				),
 			})); err != nil {
