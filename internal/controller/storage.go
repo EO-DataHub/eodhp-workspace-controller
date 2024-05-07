@@ -20,7 +20,18 @@ func (r *WorkspaceReconciler) ReconcilePersistentVolume(
 	if err := r.Get(ctx, client.ObjectKey{
 		Name:      storage.PVName,
 		Namespace: namespace}, pv); err == nil {
-		return nil // PersistentVolume already exists.
+		// PersistentVolume already exists.
+		if pv.Status.Phase == corev1.VolumeReleased {
+			log.Info("PersistentVolume for workspace exists but was released. Reset.",
+				"storage", storage, "namespace", namespace)
+			pv.Spec.ClaimRef = nil
+			if err := client.IgnoreAlreadyExists(r.Update(ctx, pv)); err != nil {
+				log.Error(err, "Failed to reset PersistentVolume",
+					"storage", storage, "namespace", namespace)
+				return err
+			}
+		}
+		return nil
 	} else {
 		if errors.IsNotFound(err) {
 			// PersistentVolume does not exist.
