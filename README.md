@@ -18,8 +18,9 @@ make run  # run a local instance of the controller
 ## Run in Cluster
 
 ```bash
+make manifests  # generate the latest manifests
 make install  # installs CRDs to the cluster
-make docker-build docker-push IMG=<some-registry>/<project-name>:tag  # build controller
+make docker-build docker-push IMG=<some-registry>/<project-name>:tag  # build and push controller
 make deploy IMG=<some-registry>/<project-name>:tag  # deploy controller to cluster
 ```
 
@@ -33,7 +34,7 @@ make undeploy  # remove controller from the cluster
 ## Install CRDs
 
 ```bash
-make manifests  # generate the CRDs
+make install # installs CRDs to the cluster
 ```
 
 ## Development
@@ -46,6 +47,21 @@ After updating any api/**/*_types.go files run:
 make manifests  # generate the manifests
 make  # regenerate the code
 make install  # install the CRDs to the cluster
+```
+
+### Generate Helm Chart
+
+To update the Helm chart:
+
+```bash
+make helm CHART=chart/workspace-operator
+```
+
+To publish the Helm chart:
+
+```bash
+helm package chart/workspace-operator
+helm push workspace-operator-0.1.0.tgz oci://public.ecr.aws/n1b3o1k2/helm
 ```
 
 ## Manually Export Manifests
