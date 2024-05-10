@@ -57,11 +57,13 @@ To update the Helm chart:
 make helm CHART=chart/workspace-operator
 ```
 
+__Be careful not to overwrite manual changes to the Helm manifests. Always commit to Git just before applying `make helm` and compare changes, reverting the change where the modification undoes manual changes.__
+
 To publish the Helm chart:
 
 ```bash
 helm package chart/workspace-operator
-helm push workspace-operator-0.1.0.tgz oci://public.ecr.aws/n1b3o1k2/helm
+helm push workspace-operator-x.y.z.tgz oci://public.ecr.aws/n1b3o1k2/helm
 ```
 
 ## Manually Export Manifests
