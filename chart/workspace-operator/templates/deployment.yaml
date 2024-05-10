@@ -21,14 +21,14 @@ spec:
       {{- include "workspace-operator.selectorLabels" . | nindent 8 }}
       annotations:
         kubectl.kubernetes.io/default-container: manager
+        checksum/config: {{ include (print .Template.BasePath "/manager-config.yaml") . | sha256sum }}
     spec:
       containers:
       - args: {{- toYaml .Values.controllerManager.kubeRbacProxy.args | nindent 8 }}
         env:
         - name: KUBERNETES_CLUSTER_DOMAIN
           value: {{ quote .Values.kubernetesClusterDomain }}
-        image: {{ .Values.controllerManager.kubeRbacProxy.image.repository }}:{{ .Values.controllerManager.kubeRbacProxy.image.tag
-          | default .Chart.AppVersion }}
+        image: {{ .Values.controllerManager.kubeRbacProxy.image.repository }}:{{ .Values.controllerManager.kubeRbacProxy.image.tag | default .Chart.AppVersion }}
         name: kube-rbac-proxy
         ports:
         - containerPort: 8443
@@ -40,12 +40,11 @@ spec:
           | nindent 10 }}
       - args: {{- toYaml .Values.controllerManager.manager.args | nindent 8 }}
         command:
-        - /manager
+        - /manager --config /var/config.yaml
         env:
         - name: KUBERNETES_CLUSTER_DOMAIN
           value: {{ quote .Values.kubernetesClusterDomain }}
-        image: {{ .Values.controllerManager.manager.image.repository }}:{{ .Values.controllerManager.manager.image.tag
-          | default .Chart.AppVersion }}
+        image: {{ .Values.controllerManager.manager.image.repository }}:{{ .Values.controllerManager.manager.image.tag | default .Chart.AppVersion }}
         livenessProbe:
           httpGet:
             path: /healthz
@@ -63,6 +62,13 @@ spec:
           }}
         securityContext: {{- toYaml .Values.controllerManager.manager.containerSecurityContext
           | nindent 10 }}
+        volumeMounts:
+        - mountPath: /var/config.yaml
+          name: config
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "workspace-operator.fullname" . }}-controller-manager
       securityContext:
         runAsNonRoot: true
       serviceAccountName: {{ include "workspace-operator.fullname" . }}-controller-manager
