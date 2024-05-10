@@ -73,7 +73,7 @@ spec:
                         type: object
                     type: object
                   pvName:
-                    description: Persistent volume claim name
+                    description: Persistent volume name
                     type: string
                   pvcName:
                     description: Persistent volume claim name

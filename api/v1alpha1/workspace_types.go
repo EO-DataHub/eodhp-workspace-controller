@@ -24,7 +24,7 @@ import (
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
 type StorageSpec struct {
-	// Persistent volume claim name
+	// Persistent volume name
 	PVName string `json:"pvName,omitempty"`
 	// Persistent volume claim name
 	PVCName string `json:"pvcName,omitempty"`
