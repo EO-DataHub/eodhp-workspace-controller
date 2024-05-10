@@ -29,6 +29,7 @@ spec:
         - name: KUBERNETES_CLUSTER_DOMAIN
           value: {{ quote .Values.kubernetesClusterDomain }}
         image: {{ .Values.controllerManager.kubeRbacProxy.image.repository }}:{{ .Values.controllerManager.kubeRbacProxy.image.tag | default .Chart.AppVersion }}
+        imagePullPolicy: {{ .Values.imagePullPolicy }}
         name: kube-rbac-proxy
         ports:
         - containerPort: 8443
@@ -38,13 +39,13 @@ spec:
           10 }}
         securityContext: {{- toYaml .Values.controllerManager.kubeRbacProxy.containerSecurityContext
           | nindent 10 }}
-      - args: {{- toYaml .Values.controllerManager.manager.args | nindent 8 }}
-        command:
-        - /manager --config /var/config.yaml
+      - args: 
+        - --config=/app/config.yaml {{- toYaml .Values.controllerManager.manager.args | nindent 8 }}
         env:
         - name: KUBERNETES_CLUSTER_DOMAIN
           value: {{ quote .Values.kubernetesClusterDomain }}
         image: {{ .Values.controllerManager.manager.image.repository }}:{{ .Values.controllerManager.manager.image.tag | default .Chart.AppVersion }}
+        imagePullPolicy: {{ .Values.imagePullPolicy }}
         livenessProbe:
           httpGet:
             path: /healthz
@@ -63,12 +64,13 @@ spec:
         securityContext: {{- toYaml .Values.controllerManager.manager.containerSecurityContext
           | nindent 10 }}
         volumeMounts:
-        - mountPath: /var/config.yaml
-          name: config
+        - name: config
+          mountPath: /app/config.yaml
+          subPath: config.yaml
       volumes:
         - name: config
           configMap:
-            name: {{ include "workspace-operator.fullname" . }}-controller-manager
+            name: {{ include "workspace-operator.fullname" . }}-config
       securityContext:
         runAsNonRoot: true
       serviceAccountName: {{ include "workspace-operator.fullname" . }}-controller-manager

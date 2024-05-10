@@ -3,4 +3,6 @@ kind: ConfigMap
 metadata:
   name: {{ include "workspace-operator.fullname" . }}-config
 data:
-  {{- .Values.controllerManager.config | toYaml | nindent 2 }}
+  config.yaml: |
+    {{- .Values.controllerManager.config | toYaml | nindent 4 }}
+    
