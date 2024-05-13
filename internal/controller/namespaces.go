@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 
+	corev1alpha1 "github.com/UKEODHP/workspace-controller/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -70,5 +71,56 @@ func (r *WorkspaceReconciler) DeleteNamespace(
 			log.Info("Namespace deleted", "namespace", name)
 		}
 	}
+	return nil
+}
+
+type NamespaceReconciler struct {
+	client.Client
+}
+
+func (r *NamespaceReconciler) Reconcile(ws *corev1alpha1.Workspace) error {
+	ctx := context.Background()
+	log := log.FromContext(ctx)
+
+	// Create workspace namespace if it does not already exist.
+	namespace := &corev1.Namespace{}
+	if err := r.Get(ctx, client.ObjectKey{Name: ws.Spec.Namespace}, namespace); err != nil {
+		if errors.IsNotFound(err) {
+			// Namespace does not exist
+			log.Info("Namespace for workspace does not exist", "namespace", ws.Spec.Namespace)
+
+			// Create namespace
+			namespace.Name = ws.Spec.Namespace
+			err = client.IgnoreAlreadyExists(r.Create(ctx, namespace))
+			if err == nil {
+				log.Info("Namespace created", "Namespace", namespace)
+			} else {
+				return err
+			}
+		} else {
+			log.Error(err, "Failed to get namespace", "namespace", ws.Spec.Namespace)
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (r *NamespaceReconciler) Teardown(ws *corev1alpha1.Workspace) error {
+	ctx := context.Background()
+	log := log.FromContext(ctx)
+
+	namespace := &corev1.Namespace{}
+	if err := client.IgnoreNotFound(
+		r.Get(ctx, client.ObjectKey{Name: ws.Spec.Namespace}, namespace)); err == nil {
+
+		if err := r.Delete(ctx, namespace); err == nil {
+			log.Info("Namespace deleted", "namespace", namespace)
+		} else {
+			log.Error(err, "Failed to delete namespace", "namespace", ws.Spec.Namespace)
+			return err
+		}
+	}
+
 	return nil
 }

@@ -62,6 +62,11 @@ func NewWorkspaceReconciler(client client.Client, scheme *runtime.Scheme,
 	}
 }
 
+type Reconciler interface {
+	Reconcile(ws corev1alpha1.Workspace) error
+	Teardown(ws corev1alpha1.Workspace) error
+}
+
 //+kubebuilder:rbac:groups=core.telespazio-uk.io,resources=workspaces,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core.telespazio-uk.io,resources=workspaces/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=core.telespazio-uk.io,resources=workspaces/finalizers,verbs=update
