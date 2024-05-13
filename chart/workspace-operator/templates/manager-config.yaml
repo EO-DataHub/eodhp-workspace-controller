@@ -5,4 +5,3 @@ metadata:
 data:
   config.yaml: |
     {{- .Values.controllerManager.config | toYaml | nindent 4 }}
-    
