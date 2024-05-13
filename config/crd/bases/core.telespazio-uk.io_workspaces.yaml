@@ -61,18 +61,23 @@ spec:
                     properties:
                       rootDirectory:
                         type: string
-                      user:
-                        properties:
-                          gid:
-                            format: int64
-                            type: integer
-                          uid:
-                            format: int64
-                            type: integer
-                        type: object
+                    type: object
+                  awsS3:
+                    properties:
+                      buckets:
+                        items:
+                          properties:
+                            create:
+                              type: boolean
+                            name:
+                              type: string
+                            path:
+                              type: string
+                          type: object
+                        type: array
                     type: object
                   pvName:
-                    description: Persistent volume claim name
+                    description: Persistent volume name
                     type: string
                   pvcName:
                     description: Persistent volume claim name
@@ -83,6 +88,16 @@ spec:
                   storageClass:
                     description: Kubernetes storage class to use
                     type: string
+                  user:
+                    description: User
+                    properties:
+                      gid:
+                        format: int64
+                        type: integer
+                      uid:
+                        format: int64
+                        type: integer
+                    type: object
                 type: object
               username:
                 description: The username of the user
@@ -104,6 +119,20 @@ spec:
                     properties:
                       accessPointID:
                         type: string
+                    type: object
+                  awsS3:
+                    properties:
+                      buckets:
+                        items:
+                          properties:
+                            accessPointID:
+                              type: string
+                            name:
+                              type: string
+                            rolePolicyID:
+                              type: string
+                          type: object
+                        type: array
                     type: object
                 type: object
             type: object

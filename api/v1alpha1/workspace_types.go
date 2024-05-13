@@ -38,10 +38,12 @@ type StorageSpec struct {
 	User User `json:"user,omitempty"`
 	// Define the EFS storage
 	AWSEFS EFSSpec `json:"awsEFS,omitempty"`
+	AWSS3  S3Spec  `json:"awsS3,omitempty"`
 }
 
 type StorageStatus struct {
 	AWSEFS EFSStatus `json:"awsEFS,omitempty"`
+	AWSS3  S3Status  `json:"awsS3,omitempty"`
 }
 
 type ServiceAccountSpec struct {

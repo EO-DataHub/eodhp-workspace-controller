@@ -128,71 +128,21 @@ func (c *AWSClient) DeleteIAMRole(ctx context.Context, roleName string) error {
 	return nil
 }
 
-func (c *AWSClient) ReconcileIAMRolePolicy(ctx context.Context, policyName string, role *iam.Role) (*string, error) {
-	log := log.FromContext(ctx)
-
-	svc := iam.New(c.sess)
-
-	if policy, err := svc.GetRolePolicy(&iam.GetRolePolicyInput{
-		PolicyName: &policyName,
-		RoleName:   role.RoleName,
-	}); err == nil {
-		return policy.PolicyDocument, nil // Policy exists.
-	} else if aerr, ok := err.(awserr.Error); ok {
-		if aerr.Code() == iam.ErrCodeNoSuchEntityException {
-			// Policy does not exist. Continue.
-			log.Info("Policy does not exist", "policy", policyName, "role", role.RoleName)
-		} else {
-			return nil, err
-		}
-	} else {
-		return nil, err
-	}
-
-	// Create policy.
-	policyDoumentTemplate, err := os.ReadFile("../templates/aws/policies/efs-role-policy.json")
-	if err != nil {
-		return nil, err
-	}
-	tmpl, err := template.New("efs-role-policy").Parse(string(policyDoumentTemplate))
-	if err != nil {
-		return nil, err
-	}
-	rolePolicyDocument := new(strings.Builder)
-	if err = tmpl.Execute(rolePolicyDocument, map[string]any{
-		"accountID": c.config.AccountID,
-		"efsID":     c.config.Storage.EFSID,
-	}); err != nil {
-		return nil, err
-	}
-	if policy, err := svc.PutRolePolicy(&iam.PutRolePolicyInput{
-		PolicyDocument: aws.String(rolePolicyDocument.String()),
-		PolicyName:     &policyName,
-		RoleName:       role.RoleName,
-	}); err == nil {
-		log.Info("Policy created", "policy", policyName, "role", role.RoleName)
-		p := policy.String()
-		return &p, nil
-	} else {
-		return nil, err
-	}
-}
-
-func (c *AWSClient) DeleteIAMRolePolicy(ctx context.Context, policyName string) error {
+func (c *AWSClient) DeleteIAMRolePolicy(ctx context.Context, policyName, roleName string) error {
 	log := log.FromContext(ctx)
 
 	svc := iam.New(c.sess)
 
 	if _, err := svc.DeleteRolePolicy(&iam.DeleteRolePolicyInput{
 		PolicyName: &policyName,
-		RoleName:   &policyName,
+		RoleName:   &roleName,
 	}); err == nil {
-		log.Info("Policy deleted", "policy", policyName)
+		log.Info("Policy deleted", "policy", policyName, "role", roleName)
 		return nil
 	} else if aerr, ok := err.(awserr.Error); ok {
 		if aerr.Code() == iam.ErrCodeNoSuchEntityException {
 			// Policy does not exist. Continue.
-			log.Info("Policy does not exist", "policy", policyName)
+			log.Info("Policy does not exist", "policy", policyName, "role", roleName)
 		} else {
 			return err
 		}
