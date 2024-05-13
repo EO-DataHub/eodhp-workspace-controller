@@ -93,7 +93,7 @@ func (r *NamespaceReconciler) Reconcile(ws *corev1alpha1.Workspace) error {
 			namespace.Name = ws.Spec.Namespace
 			err = client.IgnoreAlreadyExists(r.Create(ctx, namespace))
 			if err == nil {
-				log.Info("Namespace created", "Namespace", namespace)
+				log.Info("Namespace created", "Namespace", namespace.Name)
 			} else {
 				return err
 			}
@@ -115,7 +115,7 @@ func (r *NamespaceReconciler) Teardown(ws *corev1alpha1.Workspace) error {
 		r.Get(ctx, client.ObjectKey{Name: ws.Spec.Namespace}, namespace)); err == nil {
 
 		if err := r.Delete(ctx, namespace); err == nil {
-			log.Info("Namespace deleted", "namespace", namespace)
+			log.Info("Namespace deleted", "namespace", namespace.Name)
 		} else {
 			log.Error(err, "Failed to delete namespace", "namespace", ws.Spec.Namespace)
 			return err

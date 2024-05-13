@@ -23,9 +23,7 @@ import (
 
 	corev1alpha1 "github.com/UKEODHP/workspace-controller/api/v1alpha1"
 	"github.com/UKEODHP/workspace-controller/internal/aws"
-	"github.com/aws/aws-sdk-go/service/efs"
 	"gopkg.in/yaml.v2"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -36,9 +34,10 @@ import (
 // WorkspaceReconciler reconciles a Workspace object
 type WorkspaceReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
-	config Config
-	aws    aws.AWSClient
+	Scheme      *runtime.Scheme
+	config      Config
+	aws         aws.AWSClient
+	reconcilers []Reconciler
 }
 
 func NewWorkspaceReconciler(client client.Client, scheme *runtime.Scheme,
@@ -59,12 +58,25 @@ func NewWorkspaceReconciler(client client.Client, scheme *runtime.Scheme,
 		Scheme: scheme,
 		config: config,
 		aws:    aws,
+		reconcilers: []Reconciler{
+			&FinalizerReconciler{Client: client, finalizer: "core.telespazio-uk.io/workspace-finalizer"},
+			&NamespaceReconciler{Client: client},
+		},
 	}
 }
 
+func reverse[T any](s []T) []T {
+	t := make([]T, len(s))
+	for i := 0; i < len(s)/2; i++ {
+		j := len(s) - i - 1
+		t[i], t[j] = s[j], s[i]
+	}
+	return t
+}
+
 type Reconciler interface {
-	Reconcile(ws corev1alpha1.Workspace) error
-	Teardown(ws corev1alpha1.Workspace) error
+	Reconcile(ws *corev1alpha1.Workspace) error
+	Teardown(ws *corev1alpha1.Workspace) error
 }
 
 //+kubebuilder:rbac:groups=core.telespazio-uk.io,resources=workspaces,verbs=get;list;watch;create;update;patch;delete
@@ -87,110 +99,23 @@ type Reconciler interface {
 func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
-	// Get a reference to the workspace that has been updated
 	workspace := &corev1alpha1.Workspace{}
 	if err := r.Get(ctx, req.NamespacedName, workspace); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	// Handle finalizer
-	if continue_, err := r.ReconcileFinalizer(ctx, workspace); err != nil {
-		return ctrl.Result{}, err
-	} else if !continue_ {
-		// Workspace is being deleted, do not continue with reconciliation
-		return ctrl.Result{}, nil
-	}
-
-	// Reconcile namespace
-	if namespace, err := r.ReconcileNamespace(ctx, workspace.Spec.Namespace); err == nil {
-		// Update workspace status with namespace name
-		workspace.Status.Namespace = namespace.Name
-		if err := r.Status().Update(ctx, workspace); err != nil {
-			log.Error(err, "Failed to update namespace in workspace status",
-				"workspace.Status", workspace.Status)
+	if workspace.ObjectMeta.DeletionTimestamp.IsZero() {
+		for _, reconciler := range r.reconcilers {
+			if err := reconciler.Reconcile(workspace); err != nil {
+				log.Error(err, "Reconciler failed", "reconciler", reconciler)
+			}
 		}
-		// continue with reconciliation
 	} else {
-		return ctrl.Result{}, err
-	}
-
-	// Reconcile AWS resources
-	uniqueName := fmt.Sprintf("%s-%s", workspace.Spec.Username, r.config.ClusterName)
-	if r.aws.Enabled() {
-		// Reconcile IAM
-		role, err := r.aws.ReconcileIAMRole(ctx, uniqueName, workspace.Spec.Namespace)
-		if err == nil {
-			workspace.Status.AWSRole = *role.RoleName
-			if err := r.Status().Update(ctx, workspace); err != nil {
-				log.Error(err, "Failed to update role name in workspace status",
-					"workspace.Status", workspace.Status, "role", *role.RoleName)
+		for _, reconciler := range reverse(r.reconcilers) {
+			if err := reconciler.Teardown(workspace); err != nil {
+				log.Error(err, "Teardown failed", "reconciler", reconciler)
 			}
-		} else {
-			log.Error(err, "Failed to reconcile IAM role", "role", uniqueName)
-		}
-		if _, err = r.aws.ReconcileIAMRolePolicy(ctx, uniqueName, role); err != nil {
-			log.Error(err, "Failed to reconcile IAM role policy", "policy", uniqueName)
-		}
 
-		// Reconcile EFS Access Points
-		if apID, err := r.aws.ReconcileEFSAccessPoint(ctx, r.config.AWS.Storage.EFSID,
-			&workspace.Spec.Storage.AWSEFS, efs.PosixUser{
-				Uid: &workspace.Spec.Storage.User.UID,
-				Gid: &workspace.Spec.Storage.User.GID,
-			}); err == nil {
-
-			workspace.Status.Storage.AWSEFS.AccessPointID = *apID
-			if err := r.Status().Update(ctx, workspace); err != nil {
-				log.Error(err, "Failed to update EFS Access Point ID in workspace status",
-					"workspace.Status", workspace.Status, "EFS Access Point ID", *apID)
-			}
-		} else {
-			log.Error(err, "Failed to reconcile EFS access point",
-				"access point", workspace.Spec.Storage.AWSEFS)
-		}
-	}
-
-	// Reconcile service account
-	if workspace.Status.AWSRole != "" {
-		// Check annotations have been initialised
-		var annotations map[string]string
-		if workspace.Spec.ServiceAccount.Annotations == nil {
-			annotations = make(map[string]string, 10)
-		} else {
-			annotations = workspace.Spec.ServiceAccount.Annotations
-		}
-		// Append role ARN to service account annotations
-		annotations["eks.amazonaws.com/role-arn"] = fmt.Sprintf("arn:aws:iam::%s:role/%s",
-			r.config.AWS.AccountID, workspace.Status.AWSRole)
-	}
-	if err := r.ReconcileServiceAccount(ctx, workspace.Spec.ServiceAccount.Name,
-		workspace.Spec.Namespace, workspace.Spec.ServiceAccount.Annotations); err != nil {
-		log.Error(err, "Failed to reconcile ServiceAccount",
-			"name", workspace.Spec.ServiceAccount.Name,
-			"namespace", workspace.Spec.Namespace,
-		)
-	}
-
-	// Reconcile block storage
-	if workspace.Status.Storage.AWSEFS.AccessPointID != "" {
-		// AWS EFS access point has been created
-		if err := r.ReconcilePersistentVolume(ctx,
-			&workspace.Spec.Storage,
-			workspace.Spec.Namespace,
-			&(corev1.CSIPersistentVolumeSource{
-				Driver: "efs.csi.aws.com",
-				VolumeHandle: fmt.Sprintf(
-					"%s::%s",
-					r.config.AWS.Storage.EFSID,
-					workspace.Status.Storage.AWSEFS.AccessPointID,
-				),
-			})); err != nil {
-			log.Error(err, "Failed to reconcile PersistentVolume", "name", workspace.Name)
-		}
-		if err := r.ReconcilePersistentVolumeClaim(ctx, &workspace.Spec.Storage,
-			workspace.Status.Namespace); err != nil {
-			log.Error(err, "Failed to reconcile PersistentVolumeClaim",
-				"name", workspace.Name, "namespace", workspace.Status.Namespace)
 		}
 	}
 
@@ -262,9 +187,9 @@ func (r *WorkspaceReconciler) DeleteChildResources(
 					"access point", workspace.Status.Storage.AWSEFS.AccessPointID)
 			}
 		}
-		if err := r.aws.DeleteIAMRolePolicy(ctx, uniqueName); err != nil {
-			log.Error(err, "Failed to delete IAM role policy", "role", uniqueName)
-		}
+		// if err := r.aws.DeleteIAMRolePolicy(ctx, uniqueName); err != nil {
+		// 	log.Error(err, "Failed to delete IAM role policy", "role", uniqueName)
+		// }
 		if err := r.aws.DeleteIAMRole(ctx, uniqueName); err != nil {
 			log.Error(err, "Failed to delete IAM role", "role", uniqueName)
 		}
