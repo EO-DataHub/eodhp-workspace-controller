@@ -23,6 +23,7 @@ import (
 
 	corev1alpha1 "github.com/UKEODHP/workspace-controller/api/v1alpha1"
 	"github.com/UKEODHP/workspace-controller/internal/aws"
+	"github.com/aws/aws-sdk-go/service/efs"
 	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -128,7 +129,10 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 		// Reconcile EFS Access Points
 		if apID, err := r.aws.ReconcileEFSAccessPoint(ctx, r.config.AWS.Storage.EFSID,
-			&workspace.Spec.Storage.AWSEFS); err == nil {
+			&workspace.Spec.Storage.AWSEFS, efs.PosixUser{
+				Uid: &workspace.Spec.Storage.User.UID,
+				Gid: &workspace.Spec.Storage.User.GID,
+			}); err == nil {
 
 			workspace.Status.Storage.AWSEFS.AccessPointID = *apID
 			if err := r.Status().Update(ctx, workspace); err != nil {

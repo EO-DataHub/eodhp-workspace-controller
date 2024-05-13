@@ -20,8 +20,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+type User struct {
+	UID int64 `json:"uid,omitempty"`
+	GID int64 `json:"gid,omitempty"`
+}
 
 type StorageSpec struct {
 	// Persistent volume name
@@ -32,12 +34,14 @@ type StorageSpec struct {
 	StorageClass string `json:"storageClass,omitempty"`
 	// Size of the storage
 	Size string `json:"size,omitempty"`
+	// User
+	User User `json:"user,omitempty"`
 	// Define the EFS storage
-	AWSEFS AWSEFSSpec `json:"awsEFS,omitempty"`
+	AWSEFS EFSSpec `json:"awsEFS,omitempty"`
 }
 
 type StorageStatus struct {
-	AWSEFS AWSEFSStatus `json:"awsEFS,omitempty"`
+	AWSEFS EFSStatus `json:"awsEFS,omitempty"`
 }
 
 type ServiceAccountSpec struct {

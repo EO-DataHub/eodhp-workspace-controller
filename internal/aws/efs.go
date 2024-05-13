@@ -1,3 +1,19 @@
+/*
+Copyright 2024 Telespazio UK.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package aws
 
 import (
@@ -11,7 +27,7 @@ import (
 )
 
 func (c *AWSClient) ReconcileEFSAccessPoint(ctx context.Context, efsID string,
-	awsEFS *v1alpha1.AWSEFSSpec) (*string, error) {
+	awsEFS *v1alpha1.EFSSpec, user efs.PosixUser) (*string, error) {
 
 	log := log.FromContext(ctx)
 
@@ -47,15 +63,12 @@ func (c *AWSClient) ReconcileEFSAccessPoint(ctx context.Context, efsID string,
 	accessPointParams := &efs.CreateAccessPointInput{
 		ClientToken:  aws.String(uuid.New().String()),
 		FileSystemId: aws.String(efsID),
-		PosixUser: &efs.PosixUser{
-			Uid: aws.Int64(awsEFS.PosixUser.UID),
-			Gid: aws.Int64(awsEFS.PosixUser.GID),
-		},
+		PosixUser:    &user,
 		RootDirectory: &efs.RootDirectory{
 			Path: aws.String(awsEFS.RootDirectory),
 			CreationInfo: &efs.CreationInfo{
-				OwnerUid:    aws.Int64(awsEFS.PosixUser.UID),
-				OwnerGid:    aws.Int64(awsEFS.PosixUser.GID),
+				OwnerUid:    aws.Int64(*user.Uid),
+				OwnerGid:    aws.Int64(*user.Gid),
 				Permissions: aws.String("755"),
 			},
 		},
