@@ -40,6 +40,7 @@ type EFSStatus struct {
 type EFSAccessStatus struct {
 	Name          string `json:"name,omitempty"`
 	AccessPointID string `json:"accessPointID,omitempty"`
+	FSID          string `json:"fsID,omitempty"`
 }
 
 type S3Status struct {

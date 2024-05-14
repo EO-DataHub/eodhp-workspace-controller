@@ -62,14 +62,9 @@ func NewWorkspaceReconciler(client client.Client, scheme *runtime.Scheme,
 		reconcilers: []Reconciler{
 			&NamespaceReconciler{Client: client},
 			&ServiceAccountReconciler{Client: client},
-			&aws.IAMRoleReconciler{
-				Client: client,
-				AWS:    awsClient,
-			},
-			&aws.EFSReconciler{
-				Client: client,
-				AWS:    awsClient,
-			},
+			&aws.IAMRoleReconciler{Client: client, AWS: awsClient},
+			&aws.EFSReconciler{Client: client, AWS: awsClient},
+			&StorageReconciler{Client: client},
 		},
 		finalizer: "core.telespazio-uk.io/workspace-finalizer",
 	}

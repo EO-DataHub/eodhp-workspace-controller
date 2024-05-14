@@ -55,6 +55,7 @@ func (r *EFSReconciler) Reconcile(ctx context.Context,
 			log.Info("EFS access point reconciled",
 				"access point ID", accessPointID)
 			efsStatus.AccessPointID = *accessPointID
+			efsStatus.FSID = efsAccess.FSID
 		} else {
 			log.Error(err, "Failed to reconcile EFS access point")
 			return err

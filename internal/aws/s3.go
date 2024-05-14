@@ -26,72 +26,71 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/iam"
-	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3control"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-func (c *AWSClient) ReconcileS3Bucket(ctx context.Context, bucket corev1alpha1.S3Bucket) error {
+// func (c *AWSClient) ReconcileS3Bucket(ctx context.Context, bucket corev1alpha1.S3Bucket) error {
 
-	log := log.FromContext(ctx)
+// 	log := log.FromContext(ctx)
 
-	svc := s3.New(c.sess)
+// 	svc := s3.New(c.sess)
 
-	if _, err := svc.HeadBucket(&s3.HeadBucketInput{
-		Bucket: &bucket.Name,
-	}); err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case s3.ErrCodeNoSuchBucket:
-				// Bucket does not exist.
-				if bucket.Create {
-					if _, err := svc.CreateBucket(&s3.CreateBucketInput{
-						Bucket: &bucket.Name,
-					}); err == nil {
-						log.Info("Created S3 Bucket", "Bucket", bucket)
-					} else {
-						return err
-					}
-				} else {
-					log.Error(err, "S3 Bucket does not exist and create disabled.",
-						"bucket", bucket)
-					return err
-				}
-			default:
-				return err
-			}
-		} else {
-			return err
-		}
-	}
+// 	if _, err := svc.HeadBucket(&s3.HeadBucketInput{
+// 		Bucket: &bucket.Name,
+// 	}); err != nil {
+// 		if aerr, ok := err.(awserr.Error); ok {
+// 			switch aerr.Code() {
+// 			case s3.ErrCodeNoSuchBucket:
+// 				// Bucket does not exist.
+// 				if bucket.Create {
+// 					if _, err := svc.CreateBucket(&s3.CreateBucketInput{
+// 						Bucket: &bucket.Name,
+// 					}); err == nil {
+// 						log.Info("Created S3 Bucket", "Bucket", bucket)
+// 					} else {
+// 						return err
+// 					}
+// 				} else {
+// 					log.Error(err, "S3 Bucket does not exist and create disabled.",
+// 						"bucket", bucket)
+// 					return err
+// 				}
+// 			default:
+// 				return err
+// 			}
+// 		} else {
+// 			return err
+// 		}
+// 	}
 
-	if _, err := svc.HeadObject(&s3.HeadObjectInput{
-		Bucket: &bucket.Name,
-		Key:    &bucket.Path,
-	}); err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case s3.ErrCodeNoSuchKey:
-				// Directory does not exist. Create it.
-				_, err := svc.PutObject(&s3.PutObjectInput{
-					Bucket: &bucket.Name,
-					Key:    &bucket.Path,
-				})
-				if err == nil {
-					log.Info("Created S3 Bucket directory", "Bucket", bucket)
-				} else {
-					return err
-				}
-			default:
-				return err
-			}
-		} else {
-			return err
-		}
-	}
+// 	if _, err := svc.HeadObject(&s3.HeadObjectInput{
+// 		Bucket: &bucket.Name,
+// 		Key:    &bucket.Path,
+// 	}); err != nil {
+// 		if aerr, ok := err.(awserr.Error); ok {
+// 			switch aerr.Code() {
+// 			case s3.ErrCodeNoSuchKey:
+// 				// Directory does not exist. Create it.
+// 				_, err := svc.PutObject(&s3.PutObjectInput{
+// 					Bucket: &bucket.Name,
+// 					Key:    &bucket.Path,
+// 				})
+// 				if err == nil {
+// 					log.Info("Created S3 Bucket directory", "Bucket", bucket)
+// 				} else {
+// 					return err
+// 				}
+// 			default:
+// 				return err
+// 			}
+// 		} else {
+// 			return err
+// 		}
+// 	}
 
-	return nil
-}
+// 	return nil
+// }
 
 func (c *AWSClient) ReconcileS3AccessPoint(ctx context.Context, bucketName,
 	accessPointName string) (*string, error) {

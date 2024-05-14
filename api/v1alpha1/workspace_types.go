@@ -56,22 +56,35 @@ type WorkspaceSpec struct {
 	AWS AWSSpec `json:"aws,omitempty"`
 	// Service account
 	ServiceAccount ServiceAccountSpec `json:"serviceAccount,omitempty"`
+	// Storage
+	Storage StorageSpec `json:"storage,omitempty"`
 }
 
 type StorageSpec struct {
+	PersistentVolumes      []PVSpec  `json:"persistentVolumes,omitempty"`
+	PersistentVolumeClaims []PVCSpec `json:"persistentVolumeClaims,omitempty"`
+}
+
+type PVSpec struct {
 	// Persistent volume name
-	PVName string `json:"pvName,omitempty"`
-	// Persistent volume claim name
-	PVCName string `json:"pvcName,omitempty"`
+	Name string `json:"name,omitempty"`
 	// Kubernetes storage class to use
 	StorageClass string `json:"storageClass,omitempty"`
 	// Size of the storage
 	Size string `json:"size,omitempty"`
-	// User
-	User User `json:"user,omitempty"`
-	// Define the EFS storage
-	AWSEFS EFSSpec `json:"awsEFS,omitempty"`
-	AWSS3  S3Spec  `json:"awsS3,omitempty"`
+	// Volume Source
+	VolumeSource *VolumeSource `json:"volumeSource,omitempty"`
+}
+
+type PVCSpec struct {
+	PVSpec `json:",inline"`
+	// Persistent volume claim name
+	PVName string `json:"pvName,omitempty"`
+}
+
+type VolumeSource struct {
+	Driver          string `json:"driver,omitempty"`
+	AccessPointName string `json:"accessPointName,omitempty"`
 }
 
 type User struct {
@@ -94,9 +107,4 @@ type WorkspaceStatus struct {
 	Namespace string `json:"namespace,omitempty"`
 	// AWS status
 	AWS AWSStatus `json:"aws,omitempty"`
-}
-
-type StorageStatus struct {
-	AWSEFS EFSStatus `json:"awsEFS,omitempty"`
-	AWSS3  S3Status  `json:"awsS3,omitempty"`
 }

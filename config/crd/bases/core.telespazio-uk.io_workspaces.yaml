@@ -97,6 +97,57 @@ spec:
                     description: Name of service account
                     type: string
                 type: object
+              storage:
+                description: Storage
+                properties:
+                  persistentVolumeClaims:
+                    items:
+                      properties:
+                        name:
+                          description: Persistent volume name
+                          type: string
+                        pvName:
+                          description: Persistent volume claim name
+                          type: string
+                        size:
+                          description: Size of the storage
+                          type: string
+                        storageClass:
+                          description: Kubernetes storage class to use
+                          type: string
+                        volumeSource:
+                          description: Volume Source
+                          properties:
+                            accessPointName:
+                              type: string
+                            driver:
+                              type: string
+                          type: object
+                      type: object
+                    type: array
+                  persistentVolumes:
+                    items:
+                      properties:
+                        name:
+                          description: Persistent volume name
+                          type: string
+                        size:
+                          description: Size of the storage
+                          type: string
+                        storageClass:
+                          description: Kubernetes storage class to use
+                          type: string
+                        volumeSource:
+                          description: Volume Source
+                          properties:
+                            accessPointName:
+                              type: string
+                            driver:
+                              type: string
+                          type: object
+                      type: object
+                    type: array
+                type: object
             type: object
           status:
             properties:
@@ -110,9 +161,9 @@ spec:
                           properties:
                             accessPointID:
                               type: string
-                            name:
+                            fsID:
                               type: string
-                            rolePolicy:
+                            name:
                               type: string
                           type: object
                         type: array
