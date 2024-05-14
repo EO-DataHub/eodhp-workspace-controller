@@ -65,6 +65,10 @@ func NewWorkspaceReconciler(client client.Client, scheme *runtime.Scheme,
 				Client: client,
 				AWS:    awsClient,
 			},
+			&aws.EFSReconciler{
+				Client: client,
+				AWS:    awsClient,
+			},
 		},
 		finalizer: "core.telespazio-uk.io/workspace-finalizer",
 	}
@@ -137,9 +141,7 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context,
 			}
 		}
 
-		if updated, err := r.UpdateStatus(ctx, req, sts); updated {
-			return ctrl.Result{Requeue: true}, nil
-		} else if err != nil {
+		if _, err := r.UpdateStatus(ctx, req, sts); err != nil {
 			return ctrl.Result{}, err
 		}
 	} else {
@@ -152,15 +154,11 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context,
 			}
 		}
 
-		if updated, err := r.UpdateStatus(ctx, req, sts); updated {
-			return ctrl.Result{Requeue: true}, nil
-		} else if err != nil {
+		if _, err := r.UpdateStatus(ctx, req, sts); err != nil {
 			return ctrl.Result{}, err
 		}
 
-		if updated, err := r.TeardownFinalizer(ctx, req); updated {
-			return ctrl.Result{Requeue: true}, nil
-		} else if err != nil {
+		if _, err := r.TeardownFinalizer(ctx, req); err != nil {
 			return ctrl.Result{}, err
 		}
 	}
