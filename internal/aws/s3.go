@@ -27,173 +27,194 @@ import (
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/aws/aws-sdk-go/service/s3control"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-// func (c *AWSClient) ReconcileS3Bucket(ctx context.Context, bucket corev1alpha1.S3Bucket) error {
-
-// 	log := log.FromContext(ctx)
-
-// 	svc := s3.New(c.sess)
-
-// 	if _, err := svc.HeadBucket(&s3.HeadBucketInput{
-// 		Bucket: &bucket.Name,
-// 	}); err != nil {
-// 		if aerr, ok := err.(awserr.Error); ok {
-// 			switch aerr.Code() {
-// 			case s3.ErrCodeNoSuchBucket:
-// 				// Bucket does not exist.
-// 				if bucket.Create {
-// 					if _, err := svc.CreateBucket(&s3.CreateBucketInput{
-// 						Bucket: &bucket.Name,
-// 					}); err == nil {
-// 						log.Info("Created S3 Bucket", "Bucket", bucket)
-// 					} else {
-// 						return err
-// 					}
-// 				} else {
-// 					log.Error(err, "S3 Bucket does not exist and create disabled.",
-// 						"bucket", bucket)
-// 					return err
-// 				}
-// 			default:
-// 				return err
-// 			}
-// 		} else {
-// 			return err
-// 		}
-// 	}
-
-// 	if _, err := svc.HeadObject(&s3.HeadObjectInput{
-// 		Bucket: &bucket.Name,
-// 		Key:    &bucket.Path,
-// 	}); err != nil {
-// 		if aerr, ok := err.(awserr.Error); ok {
-// 			switch aerr.Code() {
-// 			case s3.ErrCodeNoSuchKey:
-// 				// Directory does not exist. Create it.
-// 				_, err := svc.PutObject(&s3.PutObjectInput{
-// 					Bucket: &bucket.Name,
-// 					Key:    &bucket.Path,
-// 				})
-// 				if err == nil {
-// 					log.Info("Created S3 Bucket directory", "Bucket", bucket)
-// 				} else {
-// 					return err
-// 				}
-// 			default:
-// 				return err
-// 			}
-// 		} else {
-// 			return err
-// 		}
-// 	}
-
-// 	return nil
-// }
-
-func (c *AWSClient) ReconcileS3AccessPoint(ctx context.Context, bucketName,
-	accessPointName string) (*string, error) {
-
-	log := log.FromContext(ctx)
-	svc := s3control.New(c.sess)
-
-	if ap, err := svc.GetAccessPoint(&s3control.GetAccessPointInput{
-		AccountId: aws.String(c.config.AccountID),
-		Name:      aws.String(accessPointName),
-	}); err == nil {
-		// Access point exists.
-		log.Info("Access point already exists", "access point", accessPointName)
-		apID := ap.String()
-		return &apID, nil
-	} else if aerr, ok := err.(awserr.Error); ok {
-		if aerr.Code() == s3control.ErrCodeNotFoundException {
-			// Access point does not exist. Create it.
-			if ap, err := svc.CreateAccessPoint(&s3control.CreateAccessPointInput{
-				AccountId: aws.String(c.config.AccountID),
-				Bucket:    aws.String(bucketName),
-				Name:      aws.String(accessPointName),
-			}); err == nil {
-				log.Info("Created S3 Access point", "bucket name", bucketName,
-					"access point", accessPointName)
-				apID := ap.String()
-				return &apID, nil
-			} else {
-				return nil, err
-			}
-		} else {
-			return nil, err
-		}
-	} else {
-		return nil, err
-	}
+type S3Reconciler struct {
+	client.Client
+	AWS AWSClient
 }
 
-func (c *AWSClient) DeleteS3AccessPoint(ctx context.Context, accessPointName string) error {
+func (r *S3Reconciler) Reconcile(ctx context.Context,
+	spec *corev1alpha1.WorkspaceSpec,
+	status *corev1alpha1.WorkspaceStatus) error {
 
 	log := log.FromContext(ctx)
-	svc := s3control.New(c.sess)
 
-	if _, err := svc.DeleteAccessPoint(&s3control.DeleteAccessPointInput{
-		AccountId: aws.String(c.config.AccountID),
-		Name:      aws.String(accessPointName),
-	}); err != nil {
-		log.Error(err, "Failed deleting S3 Access point", "access point", accessPointName)
-		return err
+	bucketStatuses := make([]corev1alpha1.S3BucketStatus, 0,
+		len(spec.AWS.S3.Buckets))
+
+	for _, bucket := range spec.AWS.S3.Buckets {
+		bucketStatus := &corev1alpha1.S3BucketStatus{
+			Name: bucket.Name,
+		}
+		bucketStatuses = append(bucketStatuses, *bucketStatus)
+
+		if err := r.ReconcileS3AccessPoint(ctx, &bucket,
+			bucketStatus); err != nil {
+			log.Error(err, "Failed creating S3 Access Point", "bucket", bucket)
+		}
+
+		if err := r.ReconcileS3RolePolicy(ctx, &bucket,
+			bucketStatus, spec.AWS.RoleName); err != nil {
+			log.Error(err, "Failed creating S3 Role Policy", "bucket", bucket)
+		}
+
 	}
-	log.Info("Deleted S3 Access point", "access point", accessPointName)
+	status.AWS.S3.Buckets = bucketStatuses
 	return nil
 }
 
-func (c *AWSClient) ReconcileS3RolePolicy(ctx context.Context, policyName string,
-	bucket corev1alpha1.S3Bucket, role *iam.Role) (*string, error) {
+func (r *S3Reconciler) Teardown(ctx context.Context,
+	spec *corev1alpha1.WorkspaceSpec,
+	status *corev1alpha1.WorkspaceStatus) error {
 
 	log := log.FromContext(ctx)
-	svc := iam.New(c.sess)
 
-	if policy, err := svc.GetRolePolicy(&iam.GetRolePolicyInput{
-		PolicyName: &policyName,
-		RoleName:   role.RoleName,
+	bucketStatuses := make([]corev1alpha1.S3BucketStatus, 0,
+		len(spec.AWS.S3.Buckets))
+
+	for _, bucket := range spec.AWS.S3.Buckets {
+		bucketStatus := &corev1alpha1.S3BucketStatus{
+			Name: bucket.Name,
+		}
+		bucketStatuses = append(bucketStatuses, *bucketStatus)
+
+		if status.AWS.RoleName != "" {
+			svc := iam.New(r.AWS.sess)
+			if _, err := svc.DeleteRolePolicy(&iam.DeleteRolePolicyInput{
+				PolicyName: &bucket.AccessPointName,
+				RoleName:   &status.AWS.RoleName,
+			}); err == nil {
+				log.Info("Deleted EFS Role Policy", "policy",
+					&bucket.AccessPointName, "role", &status.AWS.RoleName)
+			} else {
+				log.Error(err, "Failed to delete EFS Role Policy",
+					"policy", &bucket.AccessPointName, "role", &status.AWS.RoleName)
+			}
+		}
+
+		if err := r.DeleteS3AccessPoint(ctx, &bucket,
+			bucketStatus); err != nil {
+			log.Error(err, "Failed to delete S3 Access Point", "bucket", bucket)
+		}
+	}
+	status.AWS.S3.Buckets = bucketStatuses
+	return nil
+}
+
+func (r *S3Reconciler) ReconcileS3AccessPoint(ctx context.Context,
+	bucket *corev1alpha1.S3Bucket,
+	status *corev1alpha1.S3BucketStatus) error {
+
+	log := log.FromContext(ctx)
+	svc := s3control.New(r.AWS.sess)
+
+	if ap, err := svc.GetAccessPoint(&s3control.GetAccessPointInput{
+		AccountId: aws.String(r.AWS.config.AccountID),
+		Name:      aws.String(bucket.AccessPointName),
 	}); err == nil {
-		return policy.PolicyDocument, nil // Policy exists.
+		// Access point exists.
+		status.AccessPointARN = *ap.AccessPointArn
+	} else if aerr, ok := err.(awserr.Error); ok {
+		if aerr.Code() == "NoSuchAccessPoint" {
+			// Access point does not exist. Create it.
+			if ap, err := svc.CreateAccessPoint(&s3control.CreateAccessPointInput{
+				AccountId: aws.String(r.AWS.config.AccountID),
+				Bucket:    aws.String(bucket.Name),
+				Name:      aws.String(bucket.AccessPointName),
+			}); err == nil {
+				log.Info("Created S3 Access point", "bucket", bucket)
+				status.AccessPointARN = *ap.AccessPointArn
+			} else {
+				return err
+			}
+		} else {
+			return err
+		}
+	} else {
+		return err
+	}
+	return nil
+}
+
+func (r *S3Reconciler) DeleteS3AccessPoint(ctx context.Context,
+	bucket *corev1alpha1.S3Bucket,
+	status *corev1alpha1.S3BucketStatus) error {
+
+	log := log.FromContext(ctx)
+	svc := s3control.New(r.AWS.sess)
+
+	if _, err := svc.DeleteAccessPoint(&s3control.DeleteAccessPointInput{
+		AccountId: aws.String(r.AWS.config.AccountID),
+		Name:      aws.String(bucket.AccessPointName),
+	}); err == nil {
+		log.Info("Deleted S3 Access point", "bucket", bucket)
+		return nil
+	} else {
+		if aerr, ok := err.(awserr.Error); ok {
+			if aerr.Code() == "NoSuchAccessPoint" {
+				return nil // Already deleted
+			} else {
+				return err
+			}
+		} else {
+			return err
+		}
+	}
+}
+
+func (r *S3Reconciler) ReconcileS3RolePolicy(ctx context.Context,
+	bucket *corev1alpha1.S3Bucket,
+	status *corev1alpha1.S3BucketStatus,
+	roleName string) error {
+
+	log := log.FromContext(ctx)
+	svc := iam.New(r.AWS.sess)
+
+	if _, err := svc.GetRolePolicy(&iam.GetRolePolicyInput{
+		PolicyName: &bucket.AccessPointName,
+		RoleName:   &roleName,
+	}); err == nil {
+		status.RolePolicy = bucket.AccessPointName
+		return nil // Policy exists.
 	} else if aerr, ok := err.(awserr.Error); ok {
 		if aerr.Code() == iam.ErrCodeNoSuchEntityException {
 			// Policy does not exist. Continue.
-			log.Info("Policy does not exist", "policy", policyName, "role", role.RoleName)
 		} else {
-			return nil, err
+			return err
 		}
 	} else {
-		return nil, err
+		return err
 	}
 
 	// Create policy.
-	policyDoumentTemplate, err := os.ReadFile("../templates/aws/policies/s3-policy.json")
+	policyDoumentTemplate, err := os.ReadFile(
+		"../templates/aws/policies/s3-policy.json")
 	if err != nil {
-		return nil, err
+		return err
 	}
 	tmpl, err := template.New("efs-policy").Parse(string(policyDoumentTemplate))
 	if err != nil {
-		return nil, err
+		return err
 	}
 	rolePolicyDocument := new(strings.Builder)
 	if err = tmpl.Execute(rolePolicyDocument, map[string]any{
-		"accountID": c.config.AccountID,
-		"region":    c.config.Region,
-		"bucket":    bucket.Name,
-		"prefix":    bucket.Path,
+		"bucket": bucket.Name,
+		"prefix": bucket.Path,
 	}); err != nil {
-		return nil, err
+		return err
 	}
-	if policy, err := svc.PutRolePolicy(&iam.PutRolePolicyInput{
+	if _, err := svc.PutRolePolicy(&iam.PutRolePolicyInput{
 		PolicyDocument: aws.String(rolePolicyDocument.String()),
-		PolicyName:     &policyName,
-		RoleName:       role.RoleName,
+		PolicyName:     &bucket.AccessPointName,
+		RoleName:       &roleName,
 	}); err == nil {
-		log.Info("Policy created", "policy", policyName, "role", role.RoleName)
-		p := policy.String()
-		return &p, nil
+		log.Info("S3 Role Policy created", "bucket", bucket)
+		status.RolePolicy = bucket.AccessPointName
+		return nil
 	} else {
-		return nil, err
+		return err
 	}
 }

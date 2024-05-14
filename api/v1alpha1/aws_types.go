@@ -23,8 +23,9 @@ type S3Spec struct {
 }
 
 type S3Bucket struct {
-	Name string `json:"name,omitempty"`
-	Path string `json:"path,omitempty"`
+	Name            string `json:"name,omitempty"`
+	Path            string `json:"path,omitempty"`
+	AccessPointName string `json:"accessPointName,omitempty"`
 }
 
 type AWSStatus struct {
@@ -48,7 +49,7 @@ type S3Status struct {
 }
 
 type S3BucketStatus struct {
-	Name          string `json:"name,omitempty"`
-	AccessPointID string `json:"accessPointID,omitempty"`
-	RolePolicy    string `json:"rolePolicy,omitempty"`
+	Name           string `json:"name,omitempty"`
+	AccessPointARN string `json:"accessPointARN,omitempty"`
+	RolePolicy     string `json:"rolePolicy,omitempty"`
 }
