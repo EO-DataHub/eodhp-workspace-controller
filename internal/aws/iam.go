@@ -18,7 +18,6 @@ package aws
 
 import (
 	"context"
-	"fmt"
 	"html/template"
 	"os"
 	"strings"
@@ -33,29 +32,24 @@ import (
 
 type IAMRoleReconciler struct {
 	client.Client
-	AWS        AWSClient
-	RoleSuffix string
+	AWS AWSClient
 }
 
 func (r *IAMRoleReconciler) Reconcile(ctx context.Context,
-	ws *corev1alpha1.Workspace) error {
+	spec *corev1alpha1.WorkspaceSpec,
+	status *corev1alpha1.WorkspaceStatus) error {
 
 	log := log.FromContext(ctx)
 	svc := iam.New(r.AWS.sess)
 
-	roleName := fmt.Sprintf("%s%s", ws.Name, r.RoleSuffix)
 	if role, err := svc.GetRole(&iam.GetRoleInput{
-		RoleName: &roleName,
+		RoleName: &spec.AWS.RoleName,
 	}); err == nil {
-		ws.Status.AWSRole = *role.Role.RoleName
-		if err := r.Update(ctx, ws); err != nil {
-			log.Error(err, "Failed to update Workspace Status", "AWS Role", role)
-		}
+		status.AWS.RoleName = *role.Role.RoleName
 		return nil // Role exists.
 	} else if aerr, ok := err.(awserr.Error); ok {
 		if aerr.Code() == iam.ErrCodeNoSuchEntityException {
 			// Role does not exist. Continue.
-			log.Info("Role does not exist", "Role", roleName, "Namespace", ws.Spec.Namespace)
 		} else {
 			return err
 		}
@@ -64,7 +58,9 @@ func (r *IAMRoleReconciler) Reconcile(ctx context.Context,
 	}
 
 	// Create role.
-	trustPolicy, err := os.ReadFile("../templates/aws/policies/trust-policy.json")
+	trustPolicy, err := os.ReadFile(
+		"../templates/aws/policies/trust-policy.json",
+	)
 	if err != nil {
 		return err
 	}
@@ -78,21 +74,18 @@ func (r *IAMRoleReconciler) Reconcile(ctx context.Context,
 		"oidc": map[string]any{
 			"provider": r.AWS.config.OIDC.Provider,
 		},
-		"namespace":      ws.Spec.Namespace,
-		"serviceAccount": "workspace-controller",
+		"namespace":      spec.Namespace,
+		"serviceAccount": spec.ServiceAccount.Name,
 	}); err != nil {
 		return err
 	}
 	if role, err := svc.CreateRole(&iam.CreateRoleInput{
-		RoleName:                 &roleName,
+		RoleName:                 &spec.AWS.RoleName,
 		Path:                     aws.String("/"),
 		AssumeRolePolicyDocument: aws.String(assumeRolePolicyDocument.String()),
 	}); err == nil {
-		log.Info("Role created", "Role", role)
-		ws.Status.AWSRole = *role.Role.RoleName
-		if err := r.Update(ctx, ws); err != nil {
-			log.Error(err, "Failed to update Workspace Status", "AWS Role", role)
-		}
+		log.Info("Role created", "RoleName", role.Role.RoleName)
+		status.AWS.RoleName = *role.Role.RoleName
 		return nil
 	} else {
 		return err
@@ -100,32 +93,31 @@ func (r *IAMRoleReconciler) Reconcile(ctx context.Context,
 }
 
 func (r *IAMRoleReconciler) Teardown(ctx context.Context,
-	ws *corev1alpha1.Workspace) error {
+	spec *corev1alpha1.WorkspaceSpec,
+	status *corev1alpha1.WorkspaceStatus) error {
 
 	log := log.FromContext(ctx)
 	svc := iam.New(r.AWS.sess)
 
-	if ws.Status.AWSRole != "" {
+	if status.AWS.RoleName != "" {
 		// Delete the IAM role
 		if _, err := svc.DeleteRole(&iam.DeleteRoleInput{
-			RoleName: aws.String(ws.Status.AWSRole),
+			RoleName: aws.String(status.AWS.RoleName),
 		}); err == nil {
-			log.Info("Role deleted", "Role", ws.Status.AWSRole)
-			ws.Status.AWSRole = ""
-			if err := r.Update(ctx, ws); err != nil {
-				log.Error(err, "Failed to update Workspace Status",
-					"AWS Role", ws.Status.AWSRole)
-			}
+			log.Info("Role deleted", "Role", status.AWS.RoleName)
+			status.AWS.RoleName = ""
+			return nil
 		} else {
 			if aerr, ok := err.(awserr.Error); ok {
 				if aerr.Code() == iam.ErrCodeNoSuchEntityException {
-					return nil
+					return nil // Role doesn't exist.
 				} else {
 					return err
 				}
 			}
 			return err
 		}
+	} else {
+		return nil // Status doesn't have any role name.
 	}
-	return nil
 }

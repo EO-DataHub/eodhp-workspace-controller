@@ -18,7 +18,6 @@ package controller
 
 import (
 	"context"
-	"fmt"
 	"os"
 
 	corev1alpha1 "github.com/UKEODHP/workspace-controller/api/v1alpha1"
@@ -27,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -37,6 +37,7 @@ type WorkspaceReconciler struct {
 	config      Config
 	aws         aws.AWSClient
 	reconcilers []Reconciler
+	finalizer   string
 }
 
 func NewWorkspaceReconciler(client client.Client, scheme *runtime.Scheme,
@@ -58,17 +59,13 @@ func NewWorkspaceReconciler(client client.Client, scheme *runtime.Scheme,
 		config: config,
 		aws:    awsClient,
 		reconcilers: []Reconciler{
-			&FinalizerReconciler{
-				Client:    client,
-				Finalizer: "core.telespazio-uk.io/workspace-finalizer",
-			},
 			&NamespaceReconciler{Client: client},
 			&aws.IAMRoleReconciler{
-				Client:     client,
-				AWS:        awsClient,
-				RoleSuffix: fmt.Sprintf("-%s", config.ClusterName),
+				Client: client,
+				AWS:    awsClient,
 			},
 		},
+		finalizer: "core.telespazio-uk.io/workspace-finalizer",
 	}
 }
 
@@ -82,8 +79,16 @@ func reverse[T any](s []T) []T {
 }
 
 type Reconciler interface {
-	Reconcile(ctx context.Context, ws *corev1alpha1.Workspace) error
-	Teardown(ctx context.Context, ws *corev1alpha1.Workspace) error
+	Reconcile(
+		ctx context.Context,
+		spec *corev1alpha1.WorkspaceSpec,
+		status *corev1alpha1.WorkspaceStatus,
+	) error
+	Teardown(
+		ctx context.Context,
+		spec *corev1alpha1.WorkspaceSpec,
+		status *corev1alpha1.WorkspaceStatus,
+	) error
 }
 
 //+kubebuilder:rbac:groups=core.telespazio-uk.io,resources=workspaces,verbs=get;list;watch;create;update;patch;delete
@@ -103,26 +108,70 @@ type Reconciler interface {
 //
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.17.2/pkg/reconcile
-func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *WorkspaceReconciler) Reconcile(ctx context.Context,
+	req ctrl.Request) (ctrl.Result, error) {
+
 	log := log.FromContext(ctx)
 
-	workspace := &corev1alpha1.Workspace{}
-	if err := r.Get(ctx, req.NamespacedName, workspace); err != nil {
+	ws := &corev1alpha1.Workspace{}
+	if err := r.Get(ctx, req.NamespacedName, ws); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	if workspace.ObjectMeta.DeletionTimestamp.IsZero() {
+	if ws.ObjectMeta.DeletionTimestamp.IsZero() {
+		// Workspace is not being deleted, continue with reconciliation
+		if !controllerutil.ContainsFinalizer(ws, r.finalizer) {
+			if updated := controllerutil.AddFinalizer(ws, r.finalizer); updated {
+				if err := r.Update(ctx, ws); err != nil {
+					log.Error(err, "Failed to add finalizer", "workspace", ws)
+				}
+			}
+		}
+
 		for _, reconciler := range r.reconcilers {
-			if err := reconciler.Reconcile(ctx, workspace); err != nil {
+			if err := r.Get(ctx, req.NamespacedName, ws); err != nil {
+				log.Error(err, "Failed to refresh workspace", "workspace", ws)
+			} // Refresh Workspace from API
+
+			// Reconcile
+			if err := reconciler.Reconcile(ctx, &ws.Spec,
+				&ws.Status); err == nil {
+				// Update status
+				if err := r.Status().Update(ctx, ws); err != nil {
+					log.Error(err, "Failed to update workspace status",
+						"workspace", ws)
+				}
+			} else {
 				log.Error(err, "Reconciler failed", "reconciler", reconciler)
 			}
 		}
 	} else {
+		// Workspace is being deleted, teardown dependents
 		for _, reconciler := range reverse(r.reconcilers) {
-			if err := reconciler.Teardown(ctx, workspace); err != nil {
+			// Teardown
+			if err := r.Get(ctx, req.NamespacedName, ws); err != nil {
+				log.Error(err, "Failed to refresh workspace", "workspace", ws)
+			} // Refresh Workspace from API
+
+			if err := reconciler.Teardown(ctx, &ws.Spec,
+				&ws.Status); err == nil {
+				// Update status
+				if err := r.Status().Update(ctx, ws); err != nil {
+					log.Error(err, "Failed to update workspace status",
+						"workspace", ws)
+				}
+			} else {
 				log.Error(err, "Teardown failed", "reconciler", reconciler)
 			}
+		}
 
+		if err := r.Get(ctx, req.NamespacedName, ws); err != nil {
+			log.Error(err, "Failed to refresh workspace", "workspace", ws)
+		} // Refresh Workspace from API
+		if updated := controllerutil.RemoveFinalizer(ws, r.finalizer); updated {
+			if err := r.Update(ctx, ws); err != nil {
+				log.Error(err, "Failed to remove finalizer", "workspace", ws)
+			}
 		}
 	}
 

@@ -20,66 +20,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type User struct {
-	UID int64 `json:"uid,omitempty"`
-	GID int64 `json:"gid,omitempty"`
-}
-
-type StorageSpec struct {
-	// Persistent volume name
-	PVName string `json:"pvName,omitempty"`
-	// Persistent volume claim name
-	PVCName string `json:"pvcName,omitempty"`
-	// Kubernetes storage class to use
-	StorageClass string `json:"storageClass,omitempty"`
-	// Size of the storage
-	Size string `json:"size,omitempty"`
-	// User
-	User User `json:"user,omitempty"`
-	// Define the EFS storage
-	AWSEFS EFSSpec `json:"awsEFS,omitempty"`
-	AWSS3  S3Spec  `json:"awsS3,omitempty"`
-}
-
-type StorageStatus struct {
-	AWSEFS EFSStatus `json:"awsEFS,omitempty"`
-	AWSS3  S3Status  `json:"awsS3,omitempty"`
-}
-
-type ServiceAccountSpec struct {
-	Name string `json:"name,omitempty"`
-	// Service account annotations
-	Annotations map[string]string `json:"annotations,omitempty"`
-}
-
-// WorkspaceSpec defines the desired state of Workspace
-type WorkspaceSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
-	// The username of the user
-	Username string `json:"username,omitempty"`
-	// Namespace to create for the workspace
-	Namespace string `json:"namespace,omitempty"`
-	// Storage parameters
-	Storage StorageSpec `json:"storage,omitempty"`
-	// Service account
-	ServiceAccount ServiceAccountSpec `json:"serviceAccount,omitempty"`
-}
-
-// WorkspaceStatus defines the observed state of Workspace
-type WorkspaceStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
-	// Name of child namespace
-	Namespace string `json:"namespace,omitempty"`
-	// The AWS Role created for the user's workspace
-	AWSRole string `json:"awsRole,omitempty"`
-	// Storage parameters
-	Storage StorageStatus `json:"storage,omitempty"`
-}
-
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 
@@ -103,4 +43,60 @@ type WorkspaceList struct {
 
 func init() {
 	SchemeBuilder.Register(&Workspace{}, &WorkspaceList{})
+}
+
+// WorkspaceSpec defines the desired state of Workspace
+type WorkspaceSpec struct {
+	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
+	// Important: Run "make" to regenerate code after modifying this file
+
+	// Namespace to create for the workspace
+	Namespace string `json:"namespace,omitempty"`
+	// AWS parameters
+	AWS AWSSpec `json:"aws,omitempty"`
+	// Service account
+	ServiceAccount ServiceAccountSpec `json:"serviceAccount,omitempty"`
+}
+
+type StorageSpec struct {
+	// Persistent volume name
+	PVName string `json:"pvName,omitempty"`
+	// Persistent volume claim name
+	PVCName string `json:"pvcName,omitempty"`
+	// Kubernetes storage class to use
+	StorageClass string `json:"storageClass,omitempty"`
+	// Size of the storage
+	Size string `json:"size,omitempty"`
+	// User
+	User User `json:"user,omitempty"`
+	// Define the EFS storage
+	AWSEFS EFSSpec `json:"awsEFS,omitempty"`
+	AWSS3  S3Spec  `json:"awsS3,omitempty"`
+}
+
+type User struct {
+	UID int64 `json:"uid,omitempty"`
+	GID int64 `json:"gid,omitempty"`
+}
+
+type ServiceAccountSpec struct {
+	// Name of service account
+	Name string `json:"name,omitempty"`
+	// Service account annotations
+	Annotations map[string]string `json:"annotations,omitempty"`
+}
+
+type WorkspaceStatus struct {
+	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
+	// Important: Run "make" to regenerate code after modifying this file
+
+	// Name of child namespace
+	Namespace string `json:"namespace,omitempty"`
+	// AWS status
+	AWS AWSStatus `json:"aws,omitempty"`
+}
+
+type StorageStatus struct {
+	AWSEFS EFSStatus `json:"awsEFS,omitempty"`
+	AWSS3  S3Status  `json:"awsS3,omitempty"`
 }

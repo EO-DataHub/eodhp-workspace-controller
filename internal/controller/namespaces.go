@@ -31,50 +31,59 @@ type NamespaceReconciler struct {
 }
 
 func (r *NamespaceReconciler) Reconcile(ctx context.Context,
-	ws *corev1alpha1.Workspace) error {
+	spec *corev1alpha1.WorkspaceSpec,
+	status *corev1alpha1.WorkspaceStatus) error {
 
 	log := log.FromContext(ctx)
 
-	// Create workspace namespace if it does not already exist.
+	// Create namespace if it does not already exist.
 	namespace := &corev1.Namespace{}
-	if err := r.Get(ctx, client.ObjectKey{Name: ws.Spec.Namespace}, namespace); err != nil {
+	if err := r.Get(ctx, client.ObjectKey{Name: spec.Namespace},
+		namespace); err != nil {
 		if errors.IsNotFound(err) {
 			// Namespace does not exist
-			log.Info("Namespace for workspace does not exist", "namespace", ws.Spec.Namespace)
+			log.Info("Namespace does not exist", "namespace", spec.Namespace)
 
 			// Create namespace
-			namespace.Name = ws.Spec.Namespace
+			namespace.Name = spec.Namespace
 			err = client.IgnoreAlreadyExists(r.Create(ctx, namespace))
 			if err == nil {
-				log.Info("Namespace created", "Namespace", namespace.Name)
+				log.Info("Namespace created", "namespace", namespace.Name)
 			} else {
 				return err
 			}
 		} else {
-			log.Error(err, "Failed to get namespace", "namespace", ws.Spec.Namespace)
+			log.Error(err, "Failed to get namespace",
+				"namespace", spec.Namespace)
 			return err
 		}
 	}
 
+	status.Namespace = namespace.Name
 	return nil
 }
 
 func (r *NamespaceReconciler) Teardown(ctx context.Context,
-	ws *corev1alpha1.Workspace) error {
+	spec *corev1alpha1.WorkspaceSpec,
+	status *corev1alpha1.WorkspaceStatus) error {
 
 	log := log.FromContext(ctx)
 
 	namespace := &corev1.Namespace{}
 	if err := client.IgnoreNotFound(
-		r.Get(ctx, client.ObjectKey{Name: ws.Spec.Namespace}, namespace)); err == nil {
-
+		r.Get(ctx,
+			client.ObjectKey{Name: spec.Namespace}, namespace),
+	); err == nil {
 		if err := r.Delete(ctx, namespace); err == nil {
 			log.Info("Namespace deleted", "namespace", namespace.Name)
+			status.Namespace = ""
+			return nil
 		} else {
-			log.Error(err, "Failed to delete namespace", "namespace", ws.Spec.Namespace)
+			log.Error(err, "Failed to delete namespace",
+				"namespace", spec.Namespace)
 			return err
 		}
+	} else {
+		return err
 	}
-
-	return nil
 }
