@@ -41,9 +41,6 @@ func (r *NamespaceReconciler) Reconcile(ctx context.Context,
 	if err := r.Get(ctx, client.ObjectKey{Name: spec.Namespace},
 		namespace); err != nil {
 		if errors.IsNotFound(err) {
-			// Namespace does not exist
-			log.Info("Namespace does not exist", "namespace", spec.Namespace)
-
 			// Create namespace
 			namespace.Name = spec.Namespace
 			err = client.IgnoreAlreadyExists(r.Create(ctx, namespace))
@@ -70,20 +67,22 @@ func (r *NamespaceReconciler) Teardown(ctx context.Context,
 	log := log.FromContext(ctx)
 
 	namespace := &corev1.Namespace{}
-	if err := client.IgnoreNotFound(
-		r.Get(ctx,
-			client.ObjectKey{Name: spec.Namespace}, namespace),
-	); err == nil {
+	if err := r.Get(ctx, client.ObjectKey{Name: spec.Namespace},
+		namespace); err == nil {
 		if err := r.Delete(ctx, namespace); err == nil {
 			log.Info("Namespace deleted", "namespace", namespace.Name)
 			status.Namespace = ""
 			return nil
 		} else {
-			log.Error(err, "Failed to delete namespace",
-				"namespace", spec.Namespace)
 			return err
 		}
 	} else {
-		return err
+		if errors.IsNotFound(err) {
+			// Already deleted
+			status.Namespace = ""
+			return nil
+		} else {
+			return err
+		}
 	}
 }

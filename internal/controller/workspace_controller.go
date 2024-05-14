@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"os"
+	"reflect"
 
 	corev1alpha1 "github.com/UKEODHP/workspace-controller/api/v1alpha1"
 	"github.com/UKEODHP/workspace-controller/internal/aws"
@@ -71,6 +72,7 @@ func NewWorkspaceReconciler(client client.Client, scheme *runtime.Scheme,
 
 func reverse[T any](s []T) []T {
 	t := make([]T, len(s))
+	copy(t, s)
 	for i := 0; i < len(s)/2; i++ {
 		j := len(s) - i - 1
 		t[i], t[j] = s[j], s[i]
@@ -117,65 +119,111 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context,
 	if err := r.Get(ctx, req.NamespacedName, ws); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+	sts := ws.Status.DeepCopy()
 
 	if ws.ObjectMeta.DeletionTimestamp.IsZero() {
 		// Workspace is not being deleted, continue with reconciliation
-		if !controllerutil.ContainsFinalizer(ws, r.finalizer) {
-			if updated := controllerutil.AddFinalizer(ws, r.finalizer); updated {
-				if err := r.Update(ctx, ws); err != nil {
-					log.Error(err, "Failed to add finalizer", "workspace", ws)
-				}
-			}
+		if updated, err := r.ReconcileFinalizer(ctx, req); updated {
+			return ctrl.Result{Requeue: true}, nil
+		} else if err != nil {
+			return ctrl.Result{}, err
 		}
 
 		for _, reconciler := range r.reconcilers {
-			if err := r.Get(ctx, req.NamespacedName, ws); err != nil {
-				log.Error(err, "Failed to refresh workspace", "workspace", ws)
-			} // Refresh Workspace from API
-
 			// Reconcile
-			if err := reconciler.Reconcile(ctx, &ws.Spec,
-				&ws.Status); err == nil {
-				// Update status
-				if err := r.Status().Update(ctx, ws); err != nil {
-					log.Error(err, "Failed to update workspace status",
-						"workspace", ws)
-				}
-			} else {
+			if err := reconciler.Reconcile(ctx, &ws.Spec, sts); err != nil {
 				log.Error(err, "Reconciler failed", "reconciler", reconciler)
+				return ctrl.Result{}, err
 			}
+		}
+
+		if updated, err := r.UpdateStatus(ctx, req, sts); updated {
+			return ctrl.Result{Requeue: true}, nil
+		} else if err != nil {
+			return ctrl.Result{}, err
 		}
 	} else {
 		// Workspace is being deleted, teardown dependents
 		for _, reconciler := range reverse(r.reconcilers) {
 			// Teardown
-			if err := r.Get(ctx, req.NamespacedName, ws); err != nil {
-				log.Error(err, "Failed to refresh workspace", "workspace", ws)
-			} // Refresh Workspace from API
-
-			if err := reconciler.Teardown(ctx, &ws.Spec,
-				&ws.Status); err == nil {
-				// Update status
-				if err := r.Status().Update(ctx, ws); err != nil {
-					log.Error(err, "Failed to update workspace status",
-						"workspace", ws)
-				}
-			} else {
+			if err := reconciler.Teardown(ctx, &ws.Spec, sts); err != nil {
 				log.Error(err, "Teardown failed", "reconciler", reconciler)
+				return ctrl.Result{}, err
 			}
 		}
 
-		if err := r.Get(ctx, req.NamespacedName, ws); err != nil {
-			log.Error(err, "Failed to refresh workspace", "workspace", ws)
-		} // Refresh Workspace from API
-		if updated := controllerutil.RemoveFinalizer(ws, r.finalizer); updated {
-			if err := r.Update(ctx, ws); err != nil {
-				log.Error(err, "Failed to remove finalizer", "workspace", ws)
-			}
+		if updated, err := r.UpdateStatus(ctx, req, sts); updated {
+			return ctrl.Result{Requeue: true}, nil
+		} else if err != nil {
+			return ctrl.Result{}, err
+		}
+
+		if updated, err := r.TeardownFinalizer(ctx, req); updated {
+			return ctrl.Result{Requeue: true}, nil
+		} else if err != nil {
+			return ctrl.Result{}, err
 		}
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func (r *WorkspaceReconciler) ReconcileFinalizer(ctx context.Context,
+	req ctrl.Request) (bool, error) {
+
+	log := log.FromContext(ctx)
+	ws := &corev1alpha1.Workspace{}
+	if err := r.Get(ctx, req.NamespacedName, ws); err != nil {
+		return false, client.IgnoreNotFound(err)
+	}
+	if updated := controllerutil.AddFinalizer(ws, r.finalizer); updated {
+		if err := r.Update(ctx, ws); err != nil {
+			return false, err
+		}
+		log.Info("Added finalizer", "workspace", ws)
+		return true, nil
+	} else {
+		return false, nil
+	}
+
+}
+
+func (r *WorkspaceReconciler) TeardownFinalizer(ctx context.Context,
+	req ctrl.Request) (bool, error) {
+
+	log := log.FromContext(ctx)
+	ws := &corev1alpha1.Workspace{}
+	if err := r.Get(ctx, req.NamespacedName, ws); err != nil {
+		return false, client.IgnoreNotFound(err)
+	}
+	if updated := controllerutil.RemoveFinalizer(ws, r.finalizer); updated {
+		if err := r.Update(ctx, ws); err != nil {
+			return false, err
+		}
+		log.Info("Removed finalizer", "workspace", ws)
+		return true, nil
+	} else {
+		return false, nil
+	}
+
+}
+
+func (r *WorkspaceReconciler) UpdateStatus(ctx context.Context, req ctrl.Request,
+	sts *corev1alpha1.WorkspaceStatus) (bool, error) {
+
+	ws := &corev1alpha1.Workspace{}
+	if err := r.Get(ctx, req.NamespacedName, ws); err != nil {
+		return false, client.IgnoreNotFound(err)
+	}
+	if !reflect.DeepEqual(ws.Status, *sts) {
+		ws.Status = *sts
+		if err := r.Status().Update(ctx, ws); err == nil {
+			return true, nil
+		} else {
+			return false, err
+		}
+	}
+	return false, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
