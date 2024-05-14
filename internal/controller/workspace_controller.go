@@ -27,7 +27,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -43,10 +42,10 @@ type WorkspaceReconciler struct {
 func NewWorkspaceReconciler(client client.Client, scheme *runtime.Scheme,
 	config Config) *WorkspaceReconciler {
 
-	aws := aws.AWSClient{}
+	awsClient := aws.AWSClient{}
 	if config.AWS.Region != "" {
 		log.Log.Info("AWS region set. AWS support enabled.", "region", config.AWS.Region)
-		if err := aws.Initialise(config.AWS); err != nil {
+		if err := awsClient.Initialise(config.AWS); err != nil {
 			log.Log.Error(err, "Problem initialising AWS client")
 		}
 	} else {
@@ -57,10 +56,18 @@ func NewWorkspaceReconciler(client client.Client, scheme *runtime.Scheme,
 		Client: client,
 		Scheme: scheme,
 		config: config,
-		aws:    aws,
+		aws:    awsClient,
 		reconcilers: []Reconciler{
-			&FinalizerReconciler{Client: client, finalizer: "core.telespazio-uk.io/workspace-finalizer"},
+			&FinalizerReconciler{
+				Client:    client,
+				Finalizer: "core.telespazio-uk.io/workspace-finalizer",
+			},
 			&NamespaceReconciler{Client: client},
+			&aws.IAMRoleReconciler{
+				Client:     client,
+				AWS:        awsClient,
+				RoleSuffix: fmt.Sprintf("-%s", config.ClusterName),
+			},
 		},
 	}
 }
@@ -75,8 +82,8 @@ func reverse[T any](s []T) []T {
 }
 
 type Reconciler interface {
-	Reconcile(ws *corev1alpha1.Workspace) error
-	Teardown(ws *corev1alpha1.Workspace) error
+	Reconcile(ctx context.Context, ws *corev1alpha1.Workspace) error
+	Teardown(ctx context.Context, ws *corev1alpha1.Workspace) error
 }
 
 //+kubebuilder:rbac:groups=core.telespazio-uk.io,resources=workspaces,verbs=get;list;watch;create;update;patch;delete
@@ -106,13 +113,13 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	if workspace.ObjectMeta.DeletionTimestamp.IsZero() {
 		for _, reconciler := range r.reconcilers {
-			if err := reconciler.Reconcile(workspace); err != nil {
+			if err := reconciler.Reconcile(ctx, workspace); err != nil {
 				log.Error(err, "Reconciler failed", "reconciler", reconciler)
 			}
 		}
 	} else {
 		for _, reconciler := range reverse(r.reconcilers) {
-			if err := reconciler.Teardown(workspace); err != nil {
+			if err := reconciler.Teardown(ctx, workspace); err != nil {
 				log.Error(err, "Teardown failed", "reconciler", reconciler)
 			}
 
@@ -127,75 +134,6 @@ func (r *WorkspaceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&corev1alpha1.Workspace{}).
 		Complete(r)
-}
-
-// Reconcile finalizer
-func (r *WorkspaceReconciler) ReconcileFinalizer(ctx context.Context, workspace *corev1alpha1.Workspace) (bool, error) {
-	log := log.FromContext(ctx)
-
-	// Create finalizer
-	finalizer := "core.telespazio-uk.io/workspace-finalizer"
-	// Is object being deleted?
-	if workspace.ObjectMeta.DeletionTimestamp.IsZero() {
-		// The object is not being deleted, so we add our finalizer if it is not already present
-		if !controllerutil.ContainsFinalizer(workspace, finalizer) {
-			controllerutil.AddFinalizer(workspace, finalizer)
-			if err := r.Update(ctx, workspace); err != nil {
-				log.Info("Added finalizer to workspace", "workspace.Status", workspace.Status)
-				// Continue reconciliation
-			}
-		}
-	} else {
-		// The object is being deleted
-		if controllerutil.ContainsFinalizer(workspace, finalizer) {
-			// Our finalizer is present, so let's handle any external dependency
-			if err := r.DeleteChildResources(ctx, workspace); err != nil {
-				// If we fail to delete the external resource, we need to requeue the item
-				return false, err
-			}
-			// Remove our finalizer from the list and update it.
-			controllerutil.RemoveFinalizer(workspace, finalizer)
-			if err := r.Update(ctx, workspace); err != nil {
-				return false, err
-			}
-		}
-		// Stop reconciliation as the item is being deleted.
-		return false, nil
-	}
-	return true, nil
-}
-
-// Delete any child resources of the object.
-func (r *WorkspaceReconciler) DeleteChildResources(
-	ctx context.Context, workspace *corev1alpha1.Workspace) error {
-
-	log := log.FromContext(ctx)
-	// Delete Kubernetes resources.
-
-	r.DeletePersistentVolumeClaim(ctx, workspace.Spec.Storage.PVCName, workspace.Spec.Namespace)
-	r.DeletePersistentVolume(ctx, workspace.Spec.Storage.PVCName, workspace.Spec.Namespace)
-	r.DeleteServiceAccount(ctx, workspace.Spec.ServiceAccount.Name, workspace.Spec.Namespace)
-	r.DeleteNamespace(ctx, workspace.Spec.Namespace)
-
-	// Delete AWS resources
-	if r.aws.Enabled() {
-		uniqueName := fmt.Sprintf("%s-%s", workspace.Spec.Username, r.config.ClusterName)
-		if workspace.Status.Storage.AWSEFS.AccessPointID != "" {
-			if err := r.aws.DeleteEFSAccessPoint(ctx,
-				workspace.Status.Storage.AWSEFS.AccessPointID); err != nil {
-				log.Error(err, "Failed to delete EFS access point",
-					"access point", workspace.Status.Storage.AWSEFS.AccessPointID)
-			}
-		}
-		// if err := r.aws.DeleteIAMRolePolicy(ctx, uniqueName); err != nil {
-		// 	log.Error(err, "Failed to delete IAM role policy", "role", uniqueName)
-		// }
-		if err := r.aws.DeleteIAMRole(ctx, uniqueName); err != nil {
-			log.Error(err, "Failed to delete IAM role", "role", uniqueName)
-		}
-	}
-
-	return nil
 }
 
 type Config struct {

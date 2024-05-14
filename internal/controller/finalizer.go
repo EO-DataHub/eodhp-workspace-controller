@@ -27,15 +27,16 @@ import (
 
 type FinalizerReconciler struct {
 	client.Client
-	finalizer string
+	Finalizer string
 }
 
-func (r *FinalizerReconciler) Reconcile(workspace *corev1alpha1.Workspace) error {
-	ctx := context.Background()
+func (r *FinalizerReconciler) Reconcile(ctx context.Context,
+	workspace *corev1alpha1.Workspace) error {
+
 	log := log.FromContext(ctx)
 
-	if !controllerutil.ContainsFinalizer(workspace, r.finalizer) {
-		controllerutil.AddFinalizer(workspace, r.finalizer)
+	if !controllerutil.ContainsFinalizer(workspace, r.Finalizer) {
+		controllerutil.AddFinalizer(workspace, r.Finalizer)
 		if err := r.Update(ctx, workspace); err != nil {
 			log.Info("Added finalizer to workspace", "workspace.Status", workspace.Status)
 		}
@@ -44,10 +45,10 @@ func (r *FinalizerReconciler) Reconcile(workspace *corev1alpha1.Workspace) error
 	return nil
 }
 
-func (r *FinalizerReconciler) Teardown(workspace *corev1alpha1.Workspace) error {
-	ctx := context.Background()
+func (r *FinalizerReconciler) Teardown(ctx context.Context,
+	workspace *corev1alpha1.Workspace) error {
 
-	controllerutil.RemoveFinalizer(workspace, r.finalizer)
+	controllerutil.RemoveFinalizer(workspace, r.Finalizer)
 	if err := r.Update(ctx, workspace); err != nil {
 		return err
 	}
