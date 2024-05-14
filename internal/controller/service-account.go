@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 
+	corev1alpha1 "github.com/UKEODHP/workspace-controller/api/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	corev1 "k8s.io/api/core/v1"
@@ -26,66 +27,82 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func (r *WorkspaceReconciler) ReconcileServiceAccount(ctx context.Context,
-	name, namespace string, annotations map[string]string) error {
+type ServiceAccountReconciler struct {
+	client.Client
+}
+
+func (r *ServiceAccountReconciler) Reconcile(
+	ctx context.Context,
+	spec *corev1alpha1.WorkspaceSpec,
+	status *corev1alpha1.WorkspaceStatus) error {
 
 	log := log.FromContext(ctx)
 
 	serviceAccount := &corev1.ServiceAccount{}
 	if err := r.Get(ctx, client.ObjectKey{
-		Name: name, Namespace: namespace}, serviceAccount); err == nil {
+		Name:      spec.ServiceAccount.Name,
+		Namespace: spec.Namespace},
+		serviceAccount,
+	); err == nil {
 		// ServiceAccount already exists
 		return nil
 	} else {
 		if errors.IsNotFound(err) {
 			log.Info("ServiceAccount does not exist", "name",
-				name, "namespace", namespace)
+				spec.ServiceAccount.Name, "namespace", spec.Namespace)
 			// continue
 		} else {
-			log.Error(err, "Failed to get ServiceAccount", "name", name,
-				"namespace", namespace)
+			log.Error(err, "Failed to get ServiceAccount", "name",
+				spec.ServiceAccount.Name, "namespace", spec.Namespace)
 			return err
 		}
 	}
 
 	// Create the ServiceAccount object
-	serviceAccount.Name = name
-	serviceAccount.Namespace = namespace
-	serviceAccount.Annotations = annotations
+	serviceAccount.Name = spec.ServiceAccount.Name
+	serviceAccount.Namespace = spec.Namespace
+	serviceAccount.Annotations = spec.ServiceAccount.Annotations
 	if err := r.Create(ctx, serviceAccount); err != nil {
-		log.Error(err, "Failed to create ServiceAccount", "name", name,
-			"namespace", namespace)
+		log.Error(err, "Failed to create ServiceAccount", "name",
+			spec.ServiceAccount.Name, "namespace", spec.Namespace)
 		return err
 	}
 
-	log.Info("ServiceAccount created", "name", name, "namespace", namespace)
+	log.Info("ServiceAccount created", "name", spec.ServiceAccount.Name,
+		"namespace", spec.Namespace)
 
 	return nil
 }
 
-func (r *WorkspaceReconciler) DeleteServiceAccount(ctx context.Context,
-	name, namespace string) error {
+func (r *ServiceAccountReconciler) Teardown(
+	ctx context.Context,
+	spec *corev1alpha1.WorkspaceSpec,
+	status *corev1alpha1.WorkspaceStatus) error {
 
 	log := log.FromContext(ctx)
 
 	serviceAccount := &corev1.ServiceAccount{}
 	if err := r.Get(ctx, client.ObjectKey{
-		Name: name, Namespace: namespace}, serviceAccount); err != nil {
+		Name:      spec.ServiceAccount.Name,
+		Namespace: spec.Namespace},
+		serviceAccount,
+	); err != nil {
 		if errors.IsNotFound(err) {
 			// ServiceAccount does not exist
 			return nil
 		} else {
-			log.Error(err, "Failed to delete ServiceAccount", "name", name,
-				"namespace", namespace)
+			log.Error(err, "Failed to delete ServiceAccount",
+				"name", spec.ServiceAccount.Name, "namespace", spec.Namespace)
 			return err
 		}
 	}
 
 	if err := r.Delete(ctx, serviceAccount); err == nil {
-		log.Info("ServiceAccount deleted", "name", name, "namespace", namespace)
+		log.Info("ServiceAccount deleted",
+			"name", spec.ServiceAccount.Name, "namespace", spec.Namespace)
 	} else {
-		log.Error(err, "Failed to delete ServiceAccount", "name", name,
-			"namespace", namespace)
+		log.Error(err, "Failed to delete ServiceAccount",
+			"name", spec.ServiceAccount.Name, "namespace", spec.Namespace)
 		return err
 	}
 	return nil

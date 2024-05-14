@@ -61,6 +61,7 @@ func NewWorkspaceReconciler(client client.Client, scheme *runtime.Scheme,
 		aws:    awsClient,
 		reconcilers: []Reconciler{
 			&NamespaceReconciler{Client: client},
+			&ServiceAccountReconciler{Client: client},
 			&aws.IAMRoleReconciler{
 				Client: client,
 				AWS:    awsClient,
