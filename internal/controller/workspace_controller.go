@@ -229,12 +229,7 @@ func (r *WorkspaceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 type Config struct {
-	AWS         aws.AWSConfig `yaml:"aws"`
-	ClusterName string        `yaml:"clusterName"`
-	Storage     struct {
-		StorageClass string `yaml:"storageClass"`
-		DefaultSize  string `yaml:"defaultSize"`
-	} `yaml:"storage"`
+	AWS aws.AWSConfig `yaml:"aws"`
 }
 
 func (c *Config) Load(path string) error {
