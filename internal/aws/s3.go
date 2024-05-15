@@ -25,7 +25,6 @@ import (
 	corev1alpha1 "github.com/UKEODHP/workspace-controller/api/v1alpha1"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3control"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -64,9 +63,9 @@ func (r *S3Reconciler) Reconcile(ctx context.Context,
 				"bucket", bucket)
 		}
 
-		if err := r.ReconcileS3RolePolicy(ctx, &bucket,
-			bucketStatus, spec.AWS.RoleName); err != nil {
-			log.Error(err, "Failed reconciling S3 Role Policy",
+		if err := r.AttachPolicyToS3AccessPoint(ctx, &bucket,
+			bucketStatus, status.AWS.Role.ARN); err != nil {
+			log.Error(err, "Failed attaching S3 Access Point Policy",
 				"bucket", bucket)
 		}
 
@@ -88,20 +87,6 @@ func (r *S3Reconciler) Teardown(ctx context.Context,
 			Name: bucket.Name,
 		}
 		bucketStatuses = append(bucketStatuses, *bucketStatus)
-
-		if status.AWS.RoleName != "" {
-			svc := iam.New(r.AWS.sess)
-			if _, err := svc.DeleteRolePolicy(&iam.DeleteRolePolicyInput{
-				PolicyName: &bucket.AccessPointName,
-				RoleName:   &status.AWS.RoleName,
-			}); err == nil {
-				log.Info("Deleted EFS Role Policy", "policy",
-					&bucket.AccessPointName, "role", &status.AWS.RoleName)
-			} else {
-				log.Error(err, "Failed to delete EFS Role Policy",
-					"policy", &bucket.AccessPointName, "role", &status.AWS.RoleName)
-			}
-		}
 
 		if err := r.DeleteS3AccessPoint(ctx, &bucket,
 			bucketStatus); err != nil {
@@ -204,56 +189,56 @@ func (r *S3Reconciler) DeleteS3AccessPoint(ctx context.Context,
 	}
 }
 
-func (r *S3Reconciler) ReconcileS3RolePolicy(ctx context.Context,
+func (r *S3Reconciler) AttachPolicyToS3AccessPoint(ctx context.Context,
 	bucket *corev1alpha1.S3Bucket,
 	status *corev1alpha1.S3BucketStatus,
-	roleName string) error {
+	roleARN string) error {
 
 	log := log.FromContext(ctx)
-	svc := iam.New(r.AWS.sess)
+	svc := s3control.New(r.AWS.sess)
 
-	if _, err := svc.GetRolePolicy(&iam.GetRolePolicyInput{
-		PolicyName: &bucket.AccessPointName,
-		RoleName:   &roleName,
-	}); err == nil {
-		status.RolePolicy = bucket.AccessPointName
-		return nil // Policy exists.
-	} else if aerr, ok := err.(awserr.Error); ok {
-		if aerr.Code() == iam.ErrCodeNoSuchEntityException {
-			// Policy does not exist. Continue.
+	if _, err := svc.GetAccessPointPolicy(&s3control.GetAccessPointPolicyInput{
+		AccountId: aws.String(r.AWS.config.AccountID),
+		Name:      aws.String(strings.ToLower(bucket.AccessPointName)),
+	}); err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			if aerr.Code() == "NoSuchAccessPointPolicy" {
+				// Access point policy does not exist. Create it.
+				policyDoumentTemplate, err := os.ReadFile(
+					"../templates/aws/policies/s3-policy.json")
+				if err != nil {
+					return err
+				}
+				tmpl, err := template.New("s3-policy").Parse(
+					string(policyDoumentTemplate))
+				if err != nil {
+					return err
+				}
+				rolePolicyDocument := new(strings.Builder)
+				if err = tmpl.Execute(rolePolicyDocument, map[string]any{
+					"roleARN":        roleARN,
+					"accessPointARN": status.AccessPointARN,
+					"prefix":         bucket.Path,
+				}); err != nil {
+					return err
+				}
+
+				if _, err := svc.PutAccessPointPolicy(
+					&s3control.PutAccessPointPolicyInput{
+						AccountId: aws.String(r.AWS.config.AccountID),
+						Name: aws.String(strings.ToLower(
+							bucket.AccessPointName)),
+						Policy: aws.String(rolePolicyDocument.String()),
+					}); err != nil {
+					return err
+				}
+				log.Info("Attached policy to S3 Access point", "bucket", bucket)
+			} else {
+				return err
+			}
 		} else {
 			return err
 		}
-	} else {
-		return err
 	}
-
-	// Create policy.
-	policyDoumentTemplate, err := os.ReadFile(
-		"../templates/aws/policies/s3-policy.json")
-	if err != nil {
-		return err
-	}
-	tmpl, err := template.New("efs-policy").Parse(string(policyDoumentTemplate))
-	if err != nil {
-		return err
-	}
-	rolePolicyDocument := new(strings.Builder)
-	if err = tmpl.Execute(rolePolicyDocument, map[string]any{
-		"bucket": bucket.Name,
-		"prefix": bucket.Path,
-	}); err != nil {
-		return err
-	}
-	if _, err := svc.PutRolePolicy(&iam.PutRolePolicyInput{
-		PolicyDocument: aws.String(rolePolicyDocument.String()),
-		PolicyName:     &bucket.AccessPointName,
-		RoleName:       &roleName,
-	}); err == nil {
-		log.Info("S3 Role Policy created", "bucket", bucket)
-		status.RolePolicy = bucket.AccessPointName
-		return nil
-	} else {
-		return err
-	}
+	return nil
 }

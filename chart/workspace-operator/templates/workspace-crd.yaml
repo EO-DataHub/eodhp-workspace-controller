@@ -171,8 +171,13 @@ spec:
                           type: object
                         type: array
                     type: object
-                  roleName:
-                    type: string
+                  role:
+                    properties:
+                      arn:
+                        type: string
+                      name:
+                        type: string
+                    type: object
                   s3:
                     properties:
                       buckets:
@@ -205,4 +210,3 @@ status:
     plural: ""
   conditions: []
   storedVersions: []
-  

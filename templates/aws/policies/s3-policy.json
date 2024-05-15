@@ -3,12 +3,28 @@
   "Statement": [
     {
       "Effect": "Allow",
+      "Principal": {
+        "AWS": "{{.roleARN}}"
+      },
+      "Action": "s3:ListBucket",
+      "Resource": "{{.accessPointARN}}",
+      "Condition": {
+        "StringLike": {
+          "s3:prefix": "{{.prefix}}*"
+        }
+      }
+    },
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "{{.roleARN}}"
+      },
       "Action": [
-        "s3:PutObject",
         "s3:GetObject",
+        "s3:PutObject",
         "s3:DeleteObject"
       ],
-      "Resource": "arn:aws:s3:::{{.bucket}}/{{.prefix}}*"
+      "Resource": "{{.accessPointARN}}/object/{{.prefix}}*"
     }
   ]
 }
