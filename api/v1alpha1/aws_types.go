@@ -52,4 +52,5 @@ type S3BucketStatus struct {
 	Name           string `json:"name,omitempty"`
 	AccessPointARN string `json:"accessPointARN,omitempty"`
 	RolePolicy     string `json:"rolePolicy,omitempty"`
+	Path           string `json:"path,omitempty"`
 }

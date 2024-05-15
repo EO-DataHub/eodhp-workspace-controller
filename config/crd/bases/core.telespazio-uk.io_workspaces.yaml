@@ -177,9 +177,11 @@ spec:
                       buckets:
                         items:
                           properties:
-                            accessPointID:
+                            accessPointARN:
                               type: string
                             name:
+                              type: string
+                            path:
                               type: string
                             rolePolicy:
                               type: string

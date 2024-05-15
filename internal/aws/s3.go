@@ -26,6 +26,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/iam"
+	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3control"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -42,27 +43,34 @@ func (r *S3Reconciler) Reconcile(ctx context.Context,
 
 	log := log.FromContext(ctx)
 
-	bucketStatuses := make([]corev1alpha1.S3BucketStatus, 0,
+	status.AWS.S3.Buckets = make([]corev1alpha1.S3BucketStatus, 0,
 		len(spec.AWS.S3.Buckets))
 
-	for _, bucket := range spec.AWS.S3.Buckets {
-		bucketStatus := &corev1alpha1.S3BucketStatus{
-			Name: bucket.Name,
+	for i, bucket := range spec.AWS.S3.Buckets {
+		status.AWS.S3.Buckets = append(status.AWS.S3.Buckets,
+			corev1alpha1.S3BucketStatus{
+				Name: bucket.Name,
+			})
+		bucketStatus := &status.AWS.S3.Buckets[i]
+
+		if err := r.ReconcileS3Path(ctx, &bucket,
+			bucketStatus); err != nil {
+			log.Error(err, "Failed reconciling S3 path", "bucket", bucket)
 		}
-		bucketStatuses = append(bucketStatuses, *bucketStatus)
 
 		if err := r.ReconcileS3AccessPoint(ctx, &bucket,
 			bucketStatus); err != nil {
-			log.Error(err, "Failed creating S3 Access Point", "bucket", bucket)
+			log.Error(err, "Failed reconciling S3 Access Point",
+				"bucket", bucket)
 		}
 
 		if err := r.ReconcileS3RolePolicy(ctx, &bucket,
 			bucketStatus, spec.AWS.RoleName); err != nil {
-			log.Error(err, "Failed creating S3 Role Policy", "bucket", bucket)
+			log.Error(err, "Failed reconciling S3 Role Policy",
+				"bucket", bucket)
 		}
 
 	}
-	status.AWS.S3.Buckets = bucketStatuses
 	return nil
 }
 
@@ -101,6 +109,39 @@ func (r *S3Reconciler) Teardown(ctx context.Context,
 		}
 	}
 	status.AWS.S3.Buckets = bucketStatuses
+	return nil
+}
+
+func (r *S3Reconciler) ReconcileS3Path(ctx context.Context,
+	bucket *corev1alpha1.S3Bucket,
+	status *corev1alpha1.S3BucketStatus) error {
+
+	log := log.FromContext(ctx)
+
+	svc := s3.New(r.AWS.sess)
+	input := &s3.HeadObjectInput{
+		Bucket: aws.String(bucket.Name),
+		Key:    aws.String(bucket.Path),
+	}
+
+	_, err := svc.HeadObject(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok && aerr.Code() == "NotFound" {
+			// Path does not exist. Create it.
+			_, err = svc.PutObject(&s3.PutObjectInput{
+				Bucket: aws.String(bucket.Name),
+				Key:    aws.String(bucket.Path),
+			})
+			if err != nil {
+				return err
+			}
+			log.Info("Created S3 path", "bucket", bucket.Name, "path", bucket.Path)
+		} else {
+			return err
+		}
+	}
+
+	status.Path = bucket.Path
 	return nil
 }
 

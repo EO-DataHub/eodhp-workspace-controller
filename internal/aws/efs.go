@@ -42,14 +42,16 @@ func (r *EFSReconciler) Reconcile(ctx context.Context,
 	status *corev1alpha1.WorkspaceStatus) error {
 
 	log := log.FromContext(ctx)
-	efsStatuses := make(
+	status.AWS.EFS.AccessPoints = make(
 		[]corev1alpha1.EFSAccessStatus, 0,
 		len(spec.AWS.EFS.AccessPoints),
 	)
-	for _, efsAccess := range spec.AWS.EFS.AccessPoints {
-		efsStatus := corev1alpha1.EFSAccessStatus{
-			Name: efsAccess.Name,
-		}
+	for i, efsAccess := range spec.AWS.EFS.AccessPoints {
+		status.AWS.EFS.AccessPoints = append(status.AWS.EFS.AccessPoints,
+			corev1alpha1.EFSAccessStatus{
+				Name: efsAccess.Name,
+			})
+		efsStatus := &status.AWS.EFS.AccessPoints[i]
 		if accessPointID, err := r.ReconcileEFSAccessPoint(ctx,
 			efsAccess); err == nil {
 			log.Info("EFS access point reconciled",
@@ -69,10 +71,8 @@ func (r *EFSReconciler) Reconcile(ctx context.Context,
 			}
 
 		}
-		efsStatuses = append(efsStatuses, efsStatus)
 	}
 
-	status.AWS.EFS.AccessPoints = efsStatuses
 	return nil
 }
 
