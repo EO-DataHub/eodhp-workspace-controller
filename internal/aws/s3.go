@@ -119,13 +119,11 @@ func (r *S3Reconciler) ReconcileS3Path(ctx context.Context,
 	log := log.FromContext(ctx)
 
 	svc := s3.New(r.AWS.sess)
-	input := &s3.HeadObjectInput{
+
+	if _, err := svc.HeadObject(&s3.HeadObjectInput{
 		Bucket: aws.String(bucket.Name),
 		Key:    aws.String(bucket.Path),
-	}
-
-	_, err := svc.HeadObject(input)
-	if err != nil {
+	}); err != nil {
 		if aerr, ok := err.(awserr.Error); ok && aerr.Code() == "NotFound" {
 			// Path does not exist. Create it.
 			_, err = svc.PutObject(&s3.PutObjectInput{
@@ -154,7 +152,7 @@ func (r *S3Reconciler) ReconcileS3AccessPoint(ctx context.Context,
 
 	if ap, err := svc.GetAccessPoint(&s3control.GetAccessPointInput{
 		AccountId: aws.String(r.AWS.config.AccountID),
-		Name:      aws.String(bucket.AccessPointName),
+		Name:      aws.String(strings.ToLower(bucket.AccessPointName)),
 	}); err == nil {
 		// Access point exists.
 		status.AccessPointARN = *ap.AccessPointArn
@@ -164,7 +162,7 @@ func (r *S3Reconciler) ReconcileS3AccessPoint(ctx context.Context,
 			if ap, err := svc.CreateAccessPoint(&s3control.CreateAccessPointInput{
 				AccountId: aws.String(r.AWS.config.AccountID),
 				Bucket:    aws.String(bucket.Name),
-				Name:      aws.String(bucket.AccessPointName),
+				Name:      aws.String(strings.ToLower(bucket.AccessPointName)),
 			}); err == nil {
 				log.Info("Created S3 Access point", "bucket", bucket)
 				status.AccessPointARN = *ap.AccessPointArn
@@ -189,7 +187,7 @@ func (r *S3Reconciler) DeleteS3AccessPoint(ctx context.Context,
 
 	if _, err := svc.DeleteAccessPoint(&s3control.DeleteAccessPointInput{
 		AccountId: aws.String(r.AWS.config.AccountID),
-		Name:      aws.String(bucket.AccessPointName),
+		Name:      aws.String(strings.ToLower(bucket.AccessPointName)),
 	}); err == nil {
 		log.Info("Deleted S3 Access point", "bucket", bucket)
 		return nil
