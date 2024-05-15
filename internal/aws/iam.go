@@ -1,3 +1,19 @@
+/*
+Copyright 2024 Telespazio UK.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package aws
 
 import (
@@ -6,182 +22,102 @@ import (
 	"os"
 	"strings"
 
+	corev1alpha1 "github.com/UKEODHP/workspace-controller/api/v1alpha1"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/iam"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-func (c *AWSClient) ReconcileIAMUser(username string) (*iam.User, error) {
-	svc := iam.New(c.sess)
-
-	if user, err := svc.GetUser(&iam.GetUserInput{
-		UserName: &username,
-	}); err == nil {
-		return user.User, nil // User exists.
-	} else if aerr, ok := err.(awserr.Error); ok {
-		if aerr.Code() != iam.ErrCodeNoSuchEntityException {
-			return nil, err
-		}
-	} else {
-		return nil, err
-	}
-
-	// User does not exist. Create user.
-	if user, err := svc.CreateUser(&iam.CreateUserInput{
-		UserName: &username,
-	}); err == nil {
-		return user.User, nil
-	} else {
-		return nil, err
-	}
+type IAMRoleReconciler struct {
+	client.Client
+	AWS AWSClient
 }
 
-func (c *AWSClient) ReconcileIAMRole(ctx context.Context, roleName, namespace string) (*iam.Role, error) {
-	log := log.FromContext(ctx)
+func (r *IAMRoleReconciler) Reconcile(ctx context.Context,
+	spec *corev1alpha1.WorkspaceSpec,
+	status *corev1alpha1.WorkspaceStatus) error {
 
-	svc := iam.New(c.sess)
+	log := log.FromContext(ctx)
+	svc := iam.New(r.AWS.sess)
 
 	if role, err := svc.GetRole(&iam.GetRoleInput{
-		RoleName: &roleName,
+		RoleName: &spec.AWS.RoleName,
 	}); err == nil {
-		return role.Role, nil // Role exists.
+		status.AWS.RoleName = *role.Role.RoleName
+		return nil // Role exists.
 	} else if aerr, ok := err.(awserr.Error); ok {
 		if aerr.Code() == iam.ErrCodeNoSuchEntityException {
 			// Role does not exist. Continue.
-			log.Info("Role does not exist", "role", roleName, "namespace", namespace)
 		} else {
-			return nil, err
+			return err
 		}
 	} else {
-		return nil, err
+		return err
 	}
 
 	// Create role.
-	trustPolicy, err := os.ReadFile("../templates/aws/policies/trust-policy.json")
+	trustPolicy, err := os.ReadFile(
+		"../templates/aws/policies/trust-policy.json",
+	)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	tmpl, err := template.New("trust-policy").Parse(string(trustPolicy))
 	if err != nil {
-		return nil, err
+		return err
 	}
 	assumeRolePolicyDocument := new(strings.Builder)
 	if err := tmpl.Execute(assumeRolePolicyDocument, map[string]any{
-		"accountID": c.config.AccountID,
+		"accountID": r.AWS.config.AccountID,
 		"oidc": map[string]any{
-			"provider": c.config.OIDC.Provider,
+			"provider": r.AWS.config.OIDC.Provider,
 		},
-		"namespace":      namespace,
-		"serviceAccount": "workspace-controller",
+		"namespace":      spec.Namespace,
+		"serviceAccount": spec.ServiceAccount.Name,
 	}); err != nil {
-		return nil, err
+		return err
 	}
 	if role, err := svc.CreateRole(&iam.CreateRoleInput{
-		RoleName:                 &roleName,
+		RoleName:                 &spec.AWS.RoleName,
 		Path:                     aws.String("/"),
 		AssumeRolePolicyDocument: aws.String(assumeRolePolicyDocument.String()),
 	}); err == nil {
-		log.Info("Role created", "role", roleName, "namespace", namespace)
-		return role.Role, nil
-	} else {
-		return nil, err
-	}
-}
-
-func (c *AWSClient) DeleteIAMRole(ctx context.Context, roleName string) error {
-	log := log.FromContext(ctx)
-
-	svc := iam.New(c.sess)
-
-	if _, err := svc.DeleteRole(&iam.DeleteRoleInput{
-		RoleName: &roleName,
-	}); err == nil {
-		log.Info("Role deleted", "role", roleName)
+		log.Info("Role created", "RoleName", role.Role.RoleName)
+		status.AWS.RoleName = *role.Role.RoleName
 		return nil
-	} else if aerr, ok := err.(awserr.Error); ok {
-		if aerr.Code() == iam.ErrCodeNoSuchEntityException {
-			// Role does not exist. Continue.
-			log.Info("Role does not exist", "role", roleName)
-		} else {
-			return err
-		}
 	} else {
 		return err
 	}
-	return nil
 }
 
-func (c *AWSClient) ReconcileIAMRolePolicy(ctx context.Context, policyName string, role *iam.Role) (*string, error) {
+func (r *IAMRoleReconciler) Teardown(ctx context.Context,
+	spec *corev1alpha1.WorkspaceSpec,
+	status *corev1alpha1.WorkspaceStatus) error {
+
 	log := log.FromContext(ctx)
+	svc := iam.New(r.AWS.sess)
 
-	svc := iam.New(c.sess)
-
-	if policy, err := svc.GetRolePolicy(&iam.GetRolePolicyInput{
-		PolicyName: &policyName,
-		RoleName:   role.RoleName,
-	}); err == nil {
-		return policy.PolicyDocument, nil // Policy exists.
-	} else if aerr, ok := err.(awserr.Error); ok {
-		if aerr.Code() == iam.ErrCodeNoSuchEntityException {
-			// Policy does not exist. Continue.
-			log.Info("Policy does not exist", "policy", policyName, "role", role.RoleName)
+	if status.AWS.RoleName != "" {
+		// Delete the IAM role
+		if _, err := svc.DeleteRole(&iam.DeleteRoleInput{
+			RoleName: aws.String(status.AWS.RoleName),
+		}); err == nil {
+			log.Info("Role deleted", "Role", status.AWS.RoleName)
+			status.AWS.RoleName = ""
+			return nil
 		} else {
-			return nil, err
-		}
-	} else {
-		return nil, err
-	}
-
-	// Create policy.
-	policyDoumentTemplate, err := os.ReadFile("../templates/aws/policies/efs-role-policy.json")
-	if err != nil {
-		return nil, err
-	}
-	tmpl, err := template.New("efs-role-policy").Parse(string(policyDoumentTemplate))
-	if err != nil {
-		return nil, err
-	}
-	rolePolicyDocument := new(strings.Builder)
-	if err = tmpl.Execute(rolePolicyDocument, map[string]any{
-		"accountID": c.config.AccountID,
-		"efsID":     c.config.Storage.EFSID,
-	}); err != nil {
-		return nil, err
-	}
-	if policy, err := svc.PutRolePolicy(&iam.PutRolePolicyInput{
-		PolicyDocument: aws.String(rolePolicyDocument.String()),
-		PolicyName:     &policyName,
-		RoleName:       role.RoleName,
-	}); err == nil {
-		log.Info("Policy created", "policy", policyName, "role", role.RoleName)
-		p := policy.String()
-		return &p, nil
-	} else {
-		return nil, err
-	}
-}
-
-func (c *AWSClient) DeleteIAMRolePolicy(ctx context.Context, policyName string) error {
-	log := log.FromContext(ctx)
-
-	svc := iam.New(c.sess)
-
-	if _, err := svc.DeleteRolePolicy(&iam.DeleteRolePolicyInput{
-		PolicyName: &policyName,
-		RoleName:   &policyName,
-	}); err == nil {
-		log.Info("Policy deleted", "policy", policyName)
-		return nil
-	} else if aerr, ok := err.(awserr.Error); ok {
-		if aerr.Code() == iam.ErrCodeNoSuchEntityException {
-			// Policy does not exist. Continue.
-			log.Info("Policy does not exist", "policy", policyName)
-		} else {
+			if aerr, ok := err.(awserr.Error); ok {
+				if aerr.Code() == iam.ErrCodeNoSuchEntityException {
+					return nil // Role doesn't exist.
+				} else {
+					return err
+				}
+			}
 			return err
 		}
 	} else {
-		return err
+		return nil // Status doesn't have any role name.
 	}
-	return nil
 }

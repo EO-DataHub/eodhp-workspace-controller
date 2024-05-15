@@ -20,8 +20,8 @@ make run  # run a local instance of the controller
 ```bash
 make manifests  # generate the latest manifests
 make install  # installs CRDs to the cluster
-make docker-build docker-push IMG=<some-registry>/<project-name>:tag  # build and push controller
-make deploy IMG=<some-registry>/<project-name>:tag  # deploy controller to cluster
+make docker-build docker-push IMG=public.ecr.aws/n1b3o1k2/workspace-controller:<tag> # build and push 
+make deploy IMG=public.ecr.aws/n1b3o1k2/workspace-controller:<tag>  # deploy controller to cluster
 ```
 
 ## Uninstall
@@ -78,17 +78,9 @@ kustomize build config/default > manifests.yaml  # all other manifests
 A file path with following parameters is required to be passed to the operator with `--config <path>` flag.
 
 ```yaml
-clusterName: my-cluster
-storage:
-  defaultSize: 4Gi
 aws:
   accountID: 123456789
   region: eu-west-2
-  auth:
-    accessKey: access-key
-    secretKey: secret-key
   oidc:
     provider: oidc.eks.my-region.amazonaws.com/id/A1B2C3D4E5F6G7H8
-  storage:
-    efsID: fs-abc123def456
 ```

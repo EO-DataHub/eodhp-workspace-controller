@@ -39,6 +39,51 @@ spec:
           spec:
             description: WorkspaceSpec defines the desired state of Workspace
             properties:
+              aws:
+                description: AWS parameters
+                properties:
+                  efs:
+                    properties:
+                      accessPoints:
+                        items:
+                          properties:
+                            fsID:
+                              type: string
+                            name:
+                              type: string
+                            permissions:
+                              type: string
+                            rootDirectory:
+                              type: string
+                            user:
+                              properties:
+                                gid:
+                                  format: int64
+                                  type: integer
+                                uid:
+                                  format: int64
+                                  type: integer
+                              type: object
+                          type: object
+                        type: array
+                    type: object
+                  roleName:
+                    type: string
+                  s3:
+                    properties:
+                      buckets:
+                        items:
+                          properties:
+                            accessPointName:
+                              type: string
+                            name:
+                              type: string
+                            path:
+                              type: string
+                          type: object
+                        type: array
+                    type: object
+                type: object
               namespace:
                 description: Namespace to create for the workspace
                 type: string
@@ -51,61 +96,102 @@ spec:
                     description: Service account annotations
                     type: object
                   name:
+                    description: Name of service account
                     type: string
                 type: object
               storage:
-                description: Storage parameters
+                description: Storage
                 properties:
-                  awsEFS:
-                    description: Define the EFS storage
-                    properties:
-                      rootDirectory:
-                        type: string
-                      user:
-                        properties:
-                          gid:
-                            format: int64
-                            type: integer
-                          uid:
-                            format: int64
-                            type: integer
-                        type: object
-                    type: object
-                  pvName:
-                    description: Persistent volume claim name
-                    type: string
-                  pvcName:
-                    description: Persistent volume claim name
-                    type: string
-                  size:
-                    description: Size of the storage
-                    type: string
-                  storageClass:
-                    description: Kubernetes storage class to use
-                    type: string
+                  persistentVolumeClaims:
+                    items:
+                      properties:
+                        name:
+                          description: Persistent volume name
+                          type: string
+                        pvName:
+                          description: Persistent volume claim name
+                          type: string
+                        size:
+                          description: Size of the storage
+                          type: string
+                        storageClass:
+                          description: Kubernetes storage class to use
+                          type: string
+                        volumeSource:
+                          description: Volume Source
+                          properties:
+                            accessPointName:
+                              type: string
+                            driver:
+                              type: string
+                          type: object
+                      type: object
+                    type: array
+                  persistentVolumes:
+                    items:
+                      properties:
+                        name:
+                          description: Persistent volume name
+                          type: string
+                        size:
+                          description: Size of the storage
+                          type: string
+                        storageClass:
+                          description: Kubernetes storage class to use
+                          type: string
+                        volumeSource:
+                          description: Volume Source
+                          properties:
+                            accessPointName:
+                              type: string
+                            driver:
+                              type: string
+                          type: object
+                      type: object
+                    type: array
                 type: object
-              username:
-                description: The username of the user
-                type: string
             type: object
           status:
-            description: WorkspaceStatus defines the observed state of Workspace
             properties:
-              awsRole:
-                description: The AWS Role created for the user's workspace
-                type: string
+              aws:
+                description: AWS status
+                properties:
+                  efs:
+                    properties:
+                      accessPoints:
+                        items:
+                          properties:
+                            accessPointID:
+                              type: string
+                            fsID:
+                              type: string
+                            name:
+                              type: string
+                          type: object
+                        type: array
+                    type: object
+                  roleName:
+                    type: string
+                  s3:
+                    properties:
+                      buckets:
+                        items:
+                          properties:
+                            accessPointARN:
+                              type: string
+                            name:
+                              type: string
+                            path:
+                              type: string
+                            rolePolicy:
+                              type: string
+                          type: object
+                        type: array
+                    type: object
+                type: object
               namespace:
                 description: Name of child namespace
                 type: string
-              storage:
-                description: Storage parameters
-                properties:
-                  awsEFS:
-                    properties:
-                      accessPointID:
-                        type: string
-                    type: object
-                type: object
             type: object
         type: object
     served: true
