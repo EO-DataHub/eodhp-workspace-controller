@@ -82,7 +82,6 @@ func (r *IAMRoleReconciler) Reconcile(ctx context.Context,
 	}
 	if role, err := svc.CreateRole(&iam.CreateRoleInput{
 		RoleName:                 &spec.AWS.RoleName,
-		Path:                     aws.String("/"),
 		AssumeRolePolicyDocument: aws.String(assumeRolePolicyDocument.String()),
 	}); err == nil {
 		log.Info("Role created", "RoleName", role.Role.RoleName)
@@ -102,6 +101,28 @@ func (r *IAMRoleReconciler) Teardown(ctx context.Context,
 	svc := iam.New(r.AWS.sess)
 
 	if status.AWS.Role.Name != "" {
+		// Delete all policies attached to the role.
+		listAttachedPoliciesOutput, err := svc.ListAttachedRolePolicies(&iam.ListAttachedRolePoliciesInput{
+			RoleName: aws.String(status.AWS.Role.Name),
+		})
+		if err != nil {
+			if aerr, ok := err.(awserr.Error); ok {
+				if aerr.Code() == iam.ErrCodeNoSuchEntityException {
+					return nil // Role doesn't exist.
+				} else {
+					return err
+				}
+			}
+		}
+		for _, policy := range listAttachedPoliciesOutput.AttachedPolicies {
+			_, err := svc.DetachRolePolicy(&iam.DetachRolePolicyInput{
+				RoleName:  aws.String(status.AWS.Role.Name),
+				PolicyArn: policy.PolicyArn,
+			})
+			if err != nil {
+				return err
+			}
+		}
 		// Delete the IAM role
 		if _, err := svc.DeleteRole(&iam.DeleteRoleInput{
 			RoleName: aws.String(status.AWS.Role.Name),

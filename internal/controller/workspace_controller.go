@@ -127,19 +127,19 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context,
 		if updated, err := r.ReconcileFinalizer(ctx, req); updated {
 			return ctrl.Result{Requeue: true}, nil
 		} else if err != nil {
-			return ctrl.Result{}, err
+			return ctrl.Result{Requeue: true}, err
 		}
 
 		for _, reconciler := range r.reconcilers {
 			// Reconcile
 			if err := reconciler.Reconcile(ctx, &ws.Spec, sts); err != nil {
 				log.Error(err, "Reconciler failed", "reconciler", reconciler)
-				return ctrl.Result{}, err
+				return ctrl.Result{Requeue: true}, err
 			}
 		}
 
 		if _, err := r.UpdateStatus(ctx, req, sts); err != nil {
-			return ctrl.Result{}, err
+			return ctrl.Result{Requeue: true}, err
 		}
 	} else {
 		// Workspace is being deleted, teardown dependents
@@ -147,16 +147,16 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context,
 			// Teardown
 			if err := reconciler.Teardown(ctx, &ws.Spec, sts); err != nil {
 				log.Error(err, "Teardown failed", "reconciler", reconciler)
-				return ctrl.Result{}, err
+				return ctrl.Result{Requeue: true}, err
 			}
 		}
 
 		if _, err := r.UpdateStatus(ctx, req, sts); err != nil {
-			return ctrl.Result{}, err
+			return ctrl.Result{Requeue: true}, err
 		}
 
 		if _, err := r.TeardownFinalizer(ctx, req); err != nil {
-			return ctrl.Result{}, err
+			return ctrl.Result{Requeue: true}, err
 		}
 	}
 

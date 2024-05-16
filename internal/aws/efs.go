@@ -226,7 +226,7 @@ func (r *EFSReconciler) ReconcileEFSRolePolicy(ctx context.Context,
 		PolicyName:     &efsAccess.Name,
 		RoleName:       &roleName,
 	}); err == nil {
-		log.Info("Policy created", "policy", efsAccess.Name, "role", roleName)
+		log.Info("EFS policy created", "policy", efsAccess.Name, "role", roleName)
 		return nil
 	} else {
 		return err

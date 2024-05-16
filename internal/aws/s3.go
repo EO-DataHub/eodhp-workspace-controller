@@ -55,18 +55,21 @@ func (r *S3Reconciler) Reconcile(ctx context.Context,
 		if err := r.ReconcileS3Path(ctx, &bucket,
 			bucketStatus); err != nil {
 			log.Error(err, "Failed reconciling S3 path", "bucket", bucket)
+			return err
 		}
 
 		if err := r.ReconcileS3AccessPoint(ctx, &bucket,
 			bucketStatus); err != nil {
 			log.Error(err, "Failed reconciling S3 Access Point",
 				"bucket", bucket)
+			return err
 		}
 
 		if err := r.AttachPolicyToS3AccessPoint(ctx, &bucket,
 			bucketStatus, status.AWS.Role.ARN); err != nil {
 			log.Error(err, "Failed attaching S3 Access Point Policy",
 				"bucket", bucket)
+			return err
 		}
 
 	}
@@ -203,6 +206,9 @@ func (r *S3Reconciler) AttachPolicyToS3AccessPoint(ctx context.Context,
 	}); err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			if aerr.Code() == "NoSuchAccessPointPolicy" {
+				if roleARN == "" {
+					return nil // No role ARN to attach.
+				}
 				// Access point policy does not exist. Create it.
 				policyDoumentTemplate, err := os.ReadFile(
 					"../templates/aws/policies/s3-policy.json")
