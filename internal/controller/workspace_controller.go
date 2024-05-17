@@ -24,6 +24,7 @@ import (
 	corev1alpha1 "github.com/UKEODHP/workspace-controller/api/v1alpha1"
 	"github.com/UKEODHP/workspace-controller/internal/aws"
 	"gopkg.in/yaml.v2"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -135,7 +136,8 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context,
 		for _, reconciler := range r.reconcilers {
 			// Reconcile
 			if err := reconciler.Reconcile(ctx, &ws.Spec, sts); err != nil {
-				log.Error(err, "Reconciler failed", "reconciler", reconciler)
+				log.Error(err, "Reconciler failed",
+					"reconciler", reflect.TypeOf(reconciler))
 				return ctrl.Result{}, err
 			}
 		}
@@ -148,7 +150,8 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context,
 		for _, reconciler := range reverse(r.reconcilers) {
 			// Teardown
 			if err := reconciler.Teardown(ctx, &ws.Spec, sts); err != nil {
-				log.Error(err, "Teardown failed", "reconciler", reconciler)
+				log.Error(err, "Teardown failed",
+					"reconciler", reflect.TypeOf(reconciler))
 				return ctrl.Result{}, err
 			}
 		}
@@ -227,6 +230,11 @@ func (r *WorkspaceReconciler) UpdateStatus(ctx context.Context, req ctrl.Request
 func (r *WorkspaceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&corev1alpha1.Workspace{}).
+		Owns(&corev1.Namespace{}).
+		Owns(&corev1.ServiceAccount{}).
+		Owns(&corev1.PersistentVolume{}).
+		Owns(&corev1.PersistentVolumeClaim{}).
+		Owns(&corev1.ConfigMap{}).
 		Complete(r)
 }
 
