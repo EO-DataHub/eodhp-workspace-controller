@@ -29,7 +29,7 @@ import (
 )
 
 type StorageReconciler struct {
-	client.Client
+	Client
 }
 
 func (r *StorageReconciler) Reconcile(
@@ -166,12 +166,7 @@ func (r *StorageReconciler) DeletePersistentVolumes(
 				continue
 			}
 		}
-		if err := r.Delete(ctx, pv); err != nil {
-			log.Error(err, "Failed to delete PersistentVolumeClaim",
-				"pv", pvSpec.Name)
-		} else {
-			log.Info("PersistentVolumeClaim deleted", "pv", pvSpec.Name)
-		}
+		r.DeleteResource(ctx, pv)
 	}
 	return nil
 }
@@ -240,12 +235,7 @@ func (r *StorageReconciler) DeletePersistentVolumeClaims(
 				continue
 			}
 		}
-		if err := r.Delete(ctx, pvc); err != nil {
-			log.Error(err, "Failed to delete PersistentVolumeClaim",
-				"pvc", pvcSpec)
-		} else {
-			log.Info("PersistentVolumeClaim deleted", "pvc", pvcSpec)
-		}
+		r.DeleteResource(ctx, pvc)
 	}
 	return nil
 }

@@ -33,7 +33,7 @@ import (
 
 // WorkspaceReconciler reconciles a Workspace object
 type WorkspaceReconciler struct {
-	client.Client
+	Client
 	Scheme      *runtime.Scheme
 	config      Config
 	aws         aws.AWSClient
@@ -41,7 +41,7 @@ type WorkspaceReconciler struct {
 	finalizer   string
 }
 
-func NewWorkspaceReconciler(client client.Client, scheme *runtime.Scheme,
+func NewWorkspaceReconciler(client Client, scheme *runtime.Scheme,
 	config Config) *WorkspaceReconciler {
 
 	awsClient := aws.AWSClient{}

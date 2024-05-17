@@ -27,7 +27,7 @@ import (
 )
 
 type NamespaceReconciler struct {
-	client.Client
+	Client
 }
 
 func (r *NamespaceReconciler) Reconcile(ctx context.Context,
@@ -64,25 +64,24 @@ func (r *NamespaceReconciler) Teardown(ctx context.Context,
 	spec *corev1alpha1.WorkspaceSpec,
 	status *corev1alpha1.WorkspaceStatus) error {
 
-	log := log.FromContext(ctx)
-
 	namespace := &corev1.Namespace{}
 	if err := r.Get(ctx, client.ObjectKey{Name: spec.Namespace},
 		namespace); err == nil {
-		if err := r.Delete(ctx, namespace); err == nil {
-			log.Info("Namespace deleted", "namespace", namespace.Name)
-			status.Namespace = ""
+		if !namespace.ObjectMeta.DeletionTimestamp.IsZero() {
+			// Already being deleted
 			return nil
-		} else {
+		}
+		// Delete namespace
+		if err := r.DeleteResource(ctx, namespace); err != nil {
 			return err
 		}
 	} else {
-		if errors.IsNotFound(err) {
-			// Already deleted
-			status.Namespace = ""
-			return nil
-		} else {
+		if !errors.IsNotFound(err) {
 			return err
 		}
+		// Already deleted
 	}
+
+	status.Namespace = ""
+	return nil
 }

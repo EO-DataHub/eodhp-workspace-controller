@@ -27,7 +27,7 @@ import (
 )
 
 type ConfigReconciler struct {
-	client.Client
+	Client
 }
 
 func (r *ConfigReconciler) Reconcile(ctx context.Context,
@@ -95,6 +95,7 @@ func (r *ConfigReconciler) Teardown(ctx context.Context,
 		client.ObjectKey{Name: spec.Namespace}, config); err != nil {
 		if errors.IsNotFound(err) {
 			// Already deleted
+			return nil
 		} else {
 			log.Error(err, "Failed to get Config resource",
 				"namespace", spec.Namespace)
@@ -102,12 +103,11 @@ func (r *ConfigReconciler) Teardown(ctx context.Context,
 		}
 	}
 
-	if err := r.Delete(ctx, config); err == nil {
-		log.Info("Config deleted", "config", config.Name)
-		return nil
-	} else {
+	if err := r.DeleteResource(ctx, config); err != nil {
 		return err
 	}
+
+	return nil
 }
 
 func (r *ConfigReconciler) createConfigData(
