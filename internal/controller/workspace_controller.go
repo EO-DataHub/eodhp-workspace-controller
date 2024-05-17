@@ -66,6 +66,7 @@ func NewWorkspaceReconciler(client client.Client, scheme *runtime.Scheme,
 			&aws.EFSReconciler{Client: client, AWS: awsClient},
 			&StorageReconciler{Client: client},
 			&aws.S3Reconciler{Client: client, AWS: awsClient},
+			&ConfigReconciler{Client: client},
 		},
 		finalizer: "core.telespazio-uk.io/workspace-finalizer",
 	}
@@ -101,6 +102,7 @@ type Reconciler interface {
 //+kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=persistentvolumes,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -127,19 +129,19 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context,
 		if updated, err := r.ReconcileFinalizer(ctx, req); updated {
 			return ctrl.Result{Requeue: true}, nil
 		} else if err != nil {
-			return ctrl.Result{Requeue: true}, err
+			return ctrl.Result{}, err
 		}
 
 		for _, reconciler := range r.reconcilers {
 			// Reconcile
 			if err := reconciler.Reconcile(ctx, &ws.Spec, sts); err != nil {
 				log.Error(err, "Reconciler failed", "reconciler", reconciler)
-				return ctrl.Result{Requeue: true}, err
+				return ctrl.Result{}, err
 			}
 		}
 
 		if _, err := r.UpdateStatus(ctx, req, sts); err != nil {
-			return ctrl.Result{Requeue: true}, err
+			return ctrl.Result{}, err
 		}
 	} else {
 		// Workspace is being deleted, teardown dependents
@@ -147,16 +149,16 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context,
 			// Teardown
 			if err := reconciler.Teardown(ctx, &ws.Spec, sts); err != nil {
 				log.Error(err, "Teardown failed", "reconciler", reconciler)
-				return ctrl.Result{Requeue: true}, err
+				return ctrl.Result{}, err
 			}
 		}
 
 		if _, err := r.UpdateStatus(ctx, req, sts); err != nil {
-			return ctrl.Result{Requeue: true}, err
+			return ctrl.Result{}, err
 		}
 
 		if _, err := r.TeardownFinalizer(ctx, req); err != nil {
-			return ctrl.Result{Requeue: true}, err
+			return ctrl.Result{}, err
 		}
 	}
 

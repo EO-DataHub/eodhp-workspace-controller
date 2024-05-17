@@ -138,12 +138,15 @@ func (r *S3Reconciler) ReconcileS3AccessPoint(ctx context.Context,
 	log := log.FromContext(ctx)
 	svc := s3control.New(r.AWS.sess)
 
-	if ap, err := svc.GetAccessPoint(&s3control.GetAccessPointInput{
+	ap, err := svc.GetAccessPoint(&s3control.GetAccessPointInput{
 		AccountId: aws.String(r.AWS.config.AccountID),
 		Name:      aws.String(strings.ToLower(bucket.AccessPointName)),
-	}); err == nil {
+	})
+	if err == nil {
 		// Access point exists.
 		status.AccessPointARN = *ap.AccessPointArn
+		status.EnvVar = bucket.EnvVar
+		return nil
 	} else if aerr, ok := err.(awserr.Error); ok {
 		if aerr.Code() == "NoSuchAccessPoint" {
 			// Access point does not exist. Create it.
@@ -154,6 +157,8 @@ func (r *S3Reconciler) ReconcileS3AccessPoint(ctx context.Context,
 			}); err == nil {
 				log.Info("Created S3 Access point", "bucket", bucket)
 				status.AccessPointARN = *ap.AccessPointArn
+				status.EnvVar = bucket.EnvVar
+				return nil
 			} else {
 				return err
 			}
@@ -163,7 +168,6 @@ func (r *S3Reconciler) ReconcileS3AccessPoint(ctx context.Context,
 	} else {
 		return err
 	}
-	return nil
 }
 
 func (r *S3Reconciler) DeleteS3AccessPoint(ctx context.Context,

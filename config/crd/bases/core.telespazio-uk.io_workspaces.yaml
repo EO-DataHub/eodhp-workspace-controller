@@ -76,6 +76,8 @@ spec:
                           properties:
                             accessPointName:
                               type: string
+                            envVar:
+                              type: string
                             name:
                               type: string
                             path:
@@ -183,6 +185,8 @@ spec:
                         items:
                           properties:
                             accessPointARN:
+                              type: string
+                            envVar:
                               type: string
                             name:
                               type: string
