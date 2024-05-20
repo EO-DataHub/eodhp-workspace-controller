@@ -26,12 +26,18 @@ type S3Bucket struct {
 	Name            string `json:"name,omitempty"`
 	Path            string `json:"path,omitempty"`
 	AccessPointName string `json:"accessPointName,omitempty"`
+	EnvVar          string `json:"envVar,omitempty"`
 }
 
 type AWSStatus struct {
-	RoleName string    `json:"roleName,omitempty"`
-	EFS      EFSStatus `json:"efs,omitempty"`
-	S3       S3Status  `json:"s3,omitempty"`
+	Role AWSRoleStatus `json:"role,omitempty"`
+	EFS  EFSStatus     `json:"efs,omitempty"`
+	S3   S3Status      `json:"s3,omitempty"`
+}
+
+type AWSRoleStatus struct {
+	Name string `json:"name,omitempty"`
+	ARN  string `json:"arn,omitempty"`
 }
 
 type EFSStatus struct {
@@ -53,4 +59,5 @@ type S3BucketStatus struct {
 	AccessPointARN string `json:"accessPointARN,omitempty"`
 	RolePolicy     string `json:"rolePolicy,omitempty"`
 	Path           string `json:"path,omitempty"`
+	EnvVar         string `json:"envVar,omitempty"`
 }

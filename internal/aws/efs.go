@@ -62,11 +62,11 @@ func (r *EFSReconciler) Reconcile(ctx context.Context,
 			log.Error(err, "Failed to reconcile EFS access point")
 			return err
 		}
-		if status.AWS.RoleName != "" {
+		if status.AWS.Role.Name != "" {
 			if err := r.ReconcileEFSRolePolicy(ctx, efsAccess,
-				status.AWS.RoleName); err != nil {
+				status.AWS.Role.Name); err != nil {
 				log.Error(err, "Failed to reconcile EFS role policy",
-					"policy", efsAccess.Name, "role", status.AWS.RoleName)
+					"policy", efsAccess.Name, "role", status.AWS.Role.Name)
 				return err
 			}
 
@@ -82,16 +82,16 @@ func (r *EFSReconciler) Teardown(ctx context.Context,
 
 	log := log.FromContext(ctx)
 	for _, efsStatus := range status.AWS.EFS.AccessPoints {
-		if status.AWS.RoleName != "" {
+		if status.AWS.Role.Name != "" {
 			svc := iam.New(r.AWS.sess)
 			if _, err := svc.DeleteRolePolicy(&iam.DeleteRolePolicyInput{
-				PolicyName: &efsStatus.Name, RoleName: &status.AWS.RoleName,
+				PolicyName: &efsStatus.Name, RoleName: &status.AWS.Role.Name,
 			}); err == nil {
 				log.Info("Deleted EFS Role Policy", "policy", &efsStatus.Name,
-					"role", &status.AWS.RoleName)
+					"role", &status.AWS.Role.Name)
 			} else {
 				log.Error(err, "Failed to delete EFS Role Policy",
-					"policy", &efsStatus.Name, "role", &status.AWS.RoleName)
+					"policy", &efsStatus.Name, "role", &status.AWS.Role.Name)
 			}
 
 		}
@@ -226,7 +226,7 @@ func (r *EFSReconciler) ReconcileEFSRolePolicy(ctx context.Context,
 		PolicyName:     &efsAccess.Name,
 		RoleName:       &roleName,
 	}); err == nil {
-		log.Info("Policy created", "policy", efsAccess.Name, "role", roleName)
+		log.Info("EFS policy created", "policy", efsAccess.Name, "role", roleName)
 		return nil
 	} else {
 		return err

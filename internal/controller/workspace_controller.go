@@ -24,6 +24,7 @@ import (
 	corev1alpha1 "github.com/UKEODHP/workspace-controller/api/v1alpha1"
 	"github.com/UKEODHP/workspace-controller/internal/aws"
 	"gopkg.in/yaml.v2"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -33,7 +34,7 @@ import (
 
 // WorkspaceReconciler reconciles a Workspace object
 type WorkspaceReconciler struct {
-	client.Client
+	Client
 	Scheme      *runtime.Scheme
 	config      Config
 	aws         aws.AWSClient
@@ -41,7 +42,7 @@ type WorkspaceReconciler struct {
 	finalizer   string
 }
 
-func NewWorkspaceReconciler(client client.Client, scheme *runtime.Scheme,
+func NewWorkspaceReconciler(client Client, scheme *runtime.Scheme,
 	config Config) *WorkspaceReconciler {
 
 	awsClient := aws.AWSClient{}
@@ -66,6 +67,7 @@ func NewWorkspaceReconciler(client client.Client, scheme *runtime.Scheme,
 			&aws.EFSReconciler{Client: client, AWS: awsClient},
 			&StorageReconciler{Client: client},
 			&aws.S3Reconciler{Client: client, AWS: awsClient},
+			&ConfigReconciler{Client: client},
 		},
 		finalizer: "core.telespazio-uk.io/workspace-finalizer",
 	}
@@ -101,6 +103,7 @@ type Reconciler interface {
 //+kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=persistentvolumes,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -133,7 +136,8 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context,
 		for _, reconciler := range r.reconcilers {
 			// Reconcile
 			if err := reconciler.Reconcile(ctx, &ws.Spec, sts); err != nil {
-				log.Error(err, "Reconciler failed", "reconciler", reconciler)
+				log.Error(err, "Reconciler failed",
+					"reconciler", reflect.TypeOf(reconciler))
 				return ctrl.Result{}, err
 			}
 		}
@@ -146,7 +150,8 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context,
 		for _, reconciler := range reverse(r.reconcilers) {
 			// Teardown
 			if err := reconciler.Teardown(ctx, &ws.Spec, sts); err != nil {
-				log.Error(err, "Teardown failed", "reconciler", reconciler)
+				log.Error(err, "Teardown failed",
+					"reconciler", reflect.TypeOf(reconciler))
 				return ctrl.Result{}, err
 			}
 		}
@@ -225,6 +230,11 @@ func (r *WorkspaceReconciler) UpdateStatus(ctx context.Context, req ctrl.Request
 func (r *WorkspaceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&corev1alpha1.Workspace{}).
+		Owns(&corev1.Namespace{}).
+		Owns(&corev1.ServiceAccount{}).
+		Owns(&corev1.PersistentVolume{}).
+		Owns(&corev1.PersistentVolumeClaim{}).
+		Owns(&corev1.ConfigMap{}).
 		Complete(r)
 }
 

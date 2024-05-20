@@ -77,6 +77,8 @@ spec:
                           properties:
                             accessPointName:
                               type: string
+                            envVar:
+                              type: string
                             name:
                               type: string
                             path:
@@ -171,14 +173,21 @@ spec:
                           type: object
                         type: array
                     type: object
-                  roleName:
-                    type: string
+                  role:
+                    properties:
+                      arn:
+                        type: string
+                      name:
+                        type: string
+                    type: object
                   s3:
                     properties:
                       buckets:
                         items:
                           properties:
                             accessPointARN:
+                              type: string
+                            envVar:
                               type: string
                             name:
                               type: string
@@ -205,4 +214,3 @@ status:
     plural: ""
   conditions: []
   storedVersions: []
-  

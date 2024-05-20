@@ -69,7 +69,9 @@ var _ = Describe("Workspace Controller", func() {
 		It("should successfully reconcile the resource", func() {
 			By("Reconciling the created resource")
 			controllerReconciler := &WorkspaceReconciler{
-				Client: k8sClient,
+				Client: Client{
+					Client: k8sClient,
+				},
 				Scheme: k8sClient.Scheme(),
 			}
 

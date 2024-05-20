@@ -28,7 +28,7 @@ import (
 )
 
 type ServiceAccountReconciler struct {
-	client.Client
+	Client
 }
 
 func (r *ServiceAccountReconciler) Reconcile(
@@ -45,6 +45,17 @@ func (r *ServiceAccountReconciler) Reconcile(
 		serviceAccount,
 	); err == nil {
 		// ServiceAccount already exists
+		if status.AWS.Role.ARN != "" &&
+			serviceAccount.Annotations["eks.amazonaws.com/role-arn"] != status.AWS.Role.ARN {
+			if serviceAccount.Annotations == nil {
+				serviceAccount.Annotations = make(map[string]string)
+			}
+			serviceAccount.Annotations["eks.amazonaws.com/role-arn"] = status.AWS.Role.ARN
+			if err := r.Update(ctx, serviceAccount); err != nil {
+				log.Error(err, "Failed to update ServiceAccount",
+					"service account", serviceAccount)
+			}
+		}
 		return nil
 	} else {
 		if errors.IsNotFound(err) {
@@ -61,7 +72,14 @@ func (r *ServiceAccountReconciler) Reconcile(
 	// Create the ServiceAccount object
 	serviceAccount.Name = spec.ServiceAccount.Name
 	serviceAccount.Namespace = spec.Namespace
-	serviceAccount.Annotations = spec.ServiceAccount.Annotations
+	if spec.ServiceAccount.Annotations == nil {
+		serviceAccount.Annotations = make(map[string]string)
+	} else {
+		serviceAccount.Annotations = spec.ServiceAccount.Annotations
+	}
+	if status.AWS.Role.Name != "" {
+		serviceAccount.Annotations["eks.amazonaws.com/role-arn"] = status.AWS.Role.Name
+	}
 	if err := r.Create(ctx, serviceAccount); err != nil {
 		log.Error(err, "Failed to create ServiceAccount", "name",
 			spec.ServiceAccount.Name, "namespace", spec.Namespace)
@@ -79,31 +97,21 @@ func (r *ServiceAccountReconciler) Teardown(
 	spec *corev1alpha1.WorkspaceSpec,
 	status *corev1alpha1.WorkspaceStatus) error {
 
-	log := log.FromContext(ctx)
-
 	serviceAccount := &corev1.ServiceAccount{}
 	if err := r.Get(ctx, client.ObjectKey{
 		Name:      spec.ServiceAccount.Name,
 		Namespace: spec.Namespace},
 		serviceAccount,
-	); err != nil {
-		if errors.IsNotFound(err) {
-			// ServiceAccount does not exist
-			return nil
-		} else {
-			log.Error(err, "Failed to delete ServiceAccount",
-				"name", spec.ServiceAccount.Name, "namespace", spec.Namespace)
+	); err == nil {
+		if err := r.DeleteResource(ctx, serviceAccount); err != nil {
 			return err
 		}
+	} else {
+		if !errors.IsNotFound(err) {
+			return err
+		}
+		// ServiceAccount already deleted
 	}
 
-	if err := r.Delete(ctx, serviceAccount); err == nil {
-		log.Info("ServiceAccount deleted",
-			"name", spec.ServiceAccount.Name, "namespace", spec.Namespace)
-	} else {
-		log.Error(err, "Failed to delete ServiceAccount",
-			"name", spec.ServiceAccount.Name, "namespace", spec.Namespace)
-		return err
-	}
 	return nil
 }

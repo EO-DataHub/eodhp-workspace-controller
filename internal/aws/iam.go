@@ -45,7 +45,8 @@ func (r *IAMRoleReconciler) Reconcile(ctx context.Context,
 	if role, err := svc.GetRole(&iam.GetRoleInput{
 		RoleName: &spec.AWS.RoleName,
 	}); err == nil {
-		status.AWS.RoleName = *role.Role.RoleName
+		status.AWS.Role.Name = *role.Role.RoleName
+		status.AWS.Role.ARN = *role.Role.Arn
 		return nil // Role exists.
 	} else if aerr, ok := err.(awserr.Error); ok {
 		if aerr.Code() == iam.ErrCodeNoSuchEntityException {
@@ -81,11 +82,11 @@ func (r *IAMRoleReconciler) Reconcile(ctx context.Context,
 	}
 	if role, err := svc.CreateRole(&iam.CreateRoleInput{
 		RoleName:                 &spec.AWS.RoleName,
-		Path:                     aws.String("/"),
 		AssumeRolePolicyDocument: aws.String(assumeRolePolicyDocument.String()),
 	}); err == nil {
 		log.Info("Role created", "RoleName", role.Role.RoleName)
-		status.AWS.RoleName = *role.Role.RoleName
+		status.AWS.Role.Name = *role.Role.RoleName
+		status.AWS.Role.ARN = *role.Role.Arn
 		return nil
 	} else {
 		return err
@@ -99,13 +100,35 @@ func (r *IAMRoleReconciler) Teardown(ctx context.Context,
 	log := log.FromContext(ctx)
 	svc := iam.New(r.AWS.sess)
 
-	if status.AWS.RoleName != "" {
+	if status.AWS.Role.Name != "" {
+		// Delete all policies attached to the role.
+		listAttachedPoliciesOutput, err := svc.ListAttachedRolePolicies(&iam.ListAttachedRolePoliciesInput{
+			RoleName: aws.String(status.AWS.Role.Name),
+		})
+		if err != nil {
+			if aerr, ok := err.(awserr.Error); ok {
+				if aerr.Code() == iam.ErrCodeNoSuchEntityException {
+					return nil // Role doesn't exist.
+				} else {
+					return err
+				}
+			}
+		}
+		for _, policy := range listAttachedPoliciesOutput.AttachedPolicies {
+			_, err := svc.DetachRolePolicy(&iam.DetachRolePolicyInput{
+				RoleName:  aws.String(status.AWS.Role.Name),
+				PolicyArn: policy.PolicyArn,
+			})
+			if err != nil {
+				return err
+			}
+		}
 		// Delete the IAM role
 		if _, err := svc.DeleteRole(&iam.DeleteRoleInput{
-			RoleName: aws.String(status.AWS.RoleName),
+			RoleName: aws.String(status.AWS.Role.Name),
 		}); err == nil {
-			log.Info("Role deleted", "Role", status.AWS.RoleName)
-			status.AWS.RoleName = ""
+			log.Info("Role deleted", "Role", status.AWS.Role.Name)
+			status.AWS.Role.Name = ""
 			return nil
 		} else {
 			if aerr, ok := err.(awserr.Error); ok {
