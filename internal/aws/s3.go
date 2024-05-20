@@ -114,11 +114,10 @@ func (r *S3Reconciler) ReconcileS3Path(ctx context.Context,
 	}); err != nil {
 		if aerr, ok := err.(awserr.Error); ok && aerr.Code() == "NotFound" {
 			// Path does not exist. Create it.
-			_, err = svc.PutObject(&s3.PutObjectInput{
+			if _, err = svc.PutObject(&s3.PutObjectInput{
 				Bucket: aws.String(bucket.Name),
 				Key:    aws.String(bucket.Path),
-			})
-			if err != nil {
+			}); err != nil {
 				return err
 			}
 			log.Info("Created S3 path", "bucket", bucket.Name, "path", bucket.Path)
