@@ -29,6 +29,7 @@ type AWSConfig struct {
 	OIDC      struct {
 		Provider string `yaml:"provider"`
 	}
+	URL string `yaml:"url"`
 }
 
 type AWSClient struct {
