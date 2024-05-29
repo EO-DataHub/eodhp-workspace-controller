@@ -68,6 +68,8 @@ func NewWorkspaceReconciler(client Client, scheme *runtime.Scheme,
 			&StorageReconciler{Client: client},
 			&aws.S3Reconciler{Client: client, AWS: awsClient},
 			&ConfigReconciler{Client: client},
+			&RoleReconciler{Client: client},
+			&RoleBindingReconciler{Client: client},
 		},
 		finalizer: "core.telespazio-uk.io/workspace-finalizer",
 	}
