@@ -18,11 +18,14 @@ package aws
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"html/template"
 	"os"
 	"strings"
 
 	corev1alpha1 "github.com/UKEODHP/workspace-controller/api/v1alpha1"
+	"github.com/apache/pulsar-client-go/pulsar"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/s3"
@@ -72,6 +75,12 @@ func (r *S3Reconciler) Reconcile(ctx context.Context,
 			return err
 		}
 
+		if err := r.ReconcileFileInS3Bucket(ctx, &bucket,
+			bucketStatus); err != nil {
+            log.Error(err, "Failed creating file in S3 bucket", "bucket", bucket)
+            return err
+        }
+
 	}
 	return nil
 }
@@ -92,6 +101,10 @@ func (r *S3Reconciler) Teardown(ctx context.Context,
 		bucketStatuses = append(bucketStatuses, *bucketStatus)
 
 		if err := r.DeleteS3AccessPoint(ctx, &bucket,
+			bucketStatus); err != nil {
+			log.Error(err, "Failed to delete S3 Access Point", "bucket", bucket)
+		}
+		if err := r.DeleteFileInS3Bucket(ctx, &bucket,
 			bucketStatus); err != nil {
 			log.Error(err, "Failed to delete S3 Access Point", "bucket", bucket)
 		}
@@ -167,6 +180,258 @@ func (r *S3Reconciler) ReconcileS3AccessPoint(ctx context.Context,
 	} else {
 		return err
 	}
+}
+
+func (r *S3Reconciler) ReconcileFileInS3Bucket(ctx context.Context,
+	bucket *corev1alpha1.S3Bucket,
+	status *corev1alpha1.S3BucketStatus) error {
+
+	log := log.FromContext(ctx)
+
+	svc := s3.New(r.AWS.sess)
+
+	// Create user-dataset catalog.json file
+	Cat_ID := strings.TrimSuffix(bucket.Path, "/")
+	Cat_Key := fmt.Sprintf("%s.json", Cat_ID)
+
+	if _, err := svc.HeadObject(&s3.HeadObjectInput{
+		Bucket: aws.String(bucket.Name),
+		Key:    aws.String(Cat_Key),
+	}); err != nil {
+		if aerr, ok := err.(awserr.Error); ok && aerr.Code() == "NotFound" {
+			// Path does not exist. Create it.
+
+			// Create catalog.json dictionary
+            catalog_dict := map[string]string{
+                "type": "Catalog",
+				"id": fmt.Sprintf("%s-datasets", Cat_ID),
+				"title": fmt.Sprintf("%s Workspace Catalogue", Cat_ID),
+				"description": fmt.Sprintf("Data contained in the %s workspace", Cat_ID),
+				"stac_version": "1.0.0",
+            }
+
+			// Convert the dictionary to a JSON string
+            jsonData, err := json.Marshal(catalog_dict)
+			if err != nil {
+				return err
+			}
+
+			if _, err = svc.PutObject(&s3.PutObjectInput{
+				Bucket: aws.String(bucket.Name),
+				Key:    aws.String(Cat_Key),
+				Body:   aws.ReadSeekCloser(strings.NewReader(string(jsonData))),
+			}); err != nil {
+				return err
+			}
+
+			log.Info("Created Catalog.json file", "bucket", bucket.Name, "path", Cat_Key)
+
+			// Now we can trigger the ingestion of this catalog
+			// Create a Pulsar client
+			client, err := pulsar.NewClient(pulsar.ClientOptions{
+				URL: r.AWS.config.PulsarURL,
+			})
+
+			if err != nil {
+				return err
+			}
+
+			// Create a producer on the topic
+			producer, err := client.CreateProducer(pulsar.ProducerOptions{
+				Topic: "harvested",
+			})
+
+			if err != nil {
+				return err
+			}
+
+			// Create message
+            message_dict := map[string][]string{
+                "id": {"github.com/UKEODHP/element84-data/main"},
+				"workspace": {"default_workspace"},
+				"repository": {"UKEODHP/element84-data"},
+				"branch": {"main"},
+				"bucket_name": {bucket.Name},
+				"updated_keys": {},
+				"added_keys": {Cat_Key},
+				"deleted_keys": {},
+				"source": {"/"},
+				"target": {"/"},
+            }
+
+			// Convert map to JSON
+			jsonMessage, err := json.Marshal(message_dict)
+			if err != nil {
+				return err
+			}
+
+			// Send a message
+			_, err = producer.Send(context.Background(), &pulsar.ProducerMessage{
+				Payload: []byte(jsonMessage),
+			})
+
+			if err != nil {
+				return err
+			}
+
+			// Close the producer and client when no longer needed
+			producer.Close()
+			client.Close()
+
+			log.Info("Sent Catalog.json file to transformer", "bucket", bucket.Name, "path", Cat_Key)
+		} else {
+			return err
+		}
+	}
+
+	// Create processing-results catalog.json file
+	Cat_ID = bucket.Path
+	Cat_Key = fmt.Sprintf("%sprocessing-results.json", Cat_ID)
+
+	if _, err := svc.HeadObject(&s3.HeadObjectInput{
+		Bucket: aws.String(bucket.Name),
+		Key:    aws.String(Cat_Key),
+	}); err != nil {
+		if aerr, ok := err.(awserr.Error); ok && aerr.Code() == "NotFound" {
+			// Path does not exist. Create it.
+
+			// Create catalog.json dictionary
+            catalog_dict := map[string]string{
+                "type": "Catalog",
+				"id": "processing-results",
+				"title": fmt.Sprintf("%s Processing Result Catalogue", strings.TrimSuffix(Cat_ID, "/")),
+				"description": fmt.Sprintf("Workspace processing results contained in the %s workspace", strings.TrimSuffix(Cat_ID, "/")),
+				"stac_version": "1.0.0",
+            }
+
+			// Convert the dictionary to a JSON string
+            jsonData, err := json.Marshal(catalog_dict)
+			if err != nil {
+				return err
+			}
+
+			if _, err = svc.PutObject(&s3.PutObjectInput{
+				Bucket: aws.String(bucket.Name),
+				Key:    aws.String(Cat_Key),
+				Body:   aws.ReadSeekCloser(strings.NewReader(string(jsonData))),
+			}); err != nil {
+				return err
+			}
+
+			log.Info("Created workspace processing-results.json file", "bucket", bucket.Name, "path", Cat_Key)
+
+			// Now we can trigger the ingestion of this catalog
+			// Create a Pulsar client
+			client, err := pulsar.NewClient(pulsar.ClientOptions{
+				URL: r.AWS.config.PulsarURL,
+			})
+
+			if err != nil {
+				return err
+			}
+
+			// Create a producer on the topic
+			producer, err := client.CreateProducer(pulsar.ProducerOptions{
+				Topic: "harvested",
+			})
+
+			if err != nil {
+				return err
+			}
+
+			// Create message
+            message_dict := map[string][]string{
+                "id": {"github.com/UKEODHP/element84-data/main"},
+				"workspace": {"default_workspace"},
+				"repository": {"UKEODHP/element84-data"},
+				"branch": {"main"},
+				"bucket_name": {bucket.Name},
+				"updated_keys": {},
+				"added_keys": {Cat_Key},
+				"deleted_keys": {},
+				"source": {"/"},
+				"target": {"/"},
+            }
+
+			// Convert map to JSON
+			jsonMessage, err := json.Marshal(message_dict)
+			if err != nil {
+				return err
+			}
+
+			// Send a message
+			_, err = producer.Send(context.Background(), &pulsar.ProducerMessage{
+				Payload: []byte(jsonMessage),
+			})
+
+			if err != nil {
+				return err
+			}
+
+			// Close the producer and client when no longer needed
+			producer.Close()
+			client.Close()
+
+			log.Info("Sent processing-results.json file to transformer", "bucket", bucket.Name, "path", Cat_Key)
+		} else {
+			return err
+		}
+	}
+
+	status.Path = bucket.Path
+	return nil
+}
+
+func (r *S3Reconciler) DeleteFileInS3Bucket(ctx context.Context,
+	bucket *corev1alpha1.S3Bucket,
+	status *corev1alpha1.S3BucketStatus) error {
+
+	log := log.FromContext(ctx)
+	svc := s3.New(r.AWS.sess)
+
+
+	// Delete workspace catalog.json file
+	Cat_Key := fmt.Sprintf("%s.json", strings.TrimSuffix(bucket.Path, "/"))
+
+	_, err := svc.DeleteObject(&s3.DeleteObjectInput{
+		Bucket: aws.String(bucket.Name),
+		Key:    aws.String(Cat_Key),
+	})
+	if err != nil {
+		return err
+	}
+	
+	err = svc.WaitUntilObjectNotExists(&s3.HeadObjectInput{
+		Bucket: aws.String(bucket.Name),
+		Key:    aws.String(Cat_Key),
+	})
+	if err != nil {
+		return err
+	}
+	log.Info("Deleted Catalog.json file", "bucket", bucket.Name, "path", Cat_Key)
+
+	// Delete processing-results catalog.json file
+	Cat_ID := bucket.Path
+	Cat_Key = fmt.Sprintf("%sprocessing-results.json", Cat_ID)
+
+	_, err = svc.DeleteObject(&s3.DeleteObjectInput{
+		Bucket: aws.String(bucket.Name),
+		Key:    aws.String(Cat_Key),
+	})
+	if err != nil {
+		return err
+	}
+	
+	err = svc.WaitUntilObjectNotExists(&s3.HeadObjectInput{
+		Bucket: aws.String(bucket.Name),
+		Key:    aws.String(Cat_Key),
+	})
+	if err != nil {
+		return err
+	}
+	log.Info("Deleted workspace processing-results.json file", "bucket", bucket.Name, "path", Cat_Key)
+
+	return nil
 }
 
 func (r *S3Reconciler) DeleteS3AccessPoint(ctx context.Context,
