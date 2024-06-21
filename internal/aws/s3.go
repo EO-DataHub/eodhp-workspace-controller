@@ -18,14 +18,11 @@ package aws
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"html/template"
 	"os"
 	"strings"
 
 	corev1alpha1 "github.com/UKEODHP/workspace-controller/api/v1alpha1"
-	"github.com/apache/pulsar-client-go/pulsar"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/s3"
@@ -75,12 +72,6 @@ func (r *S3Reconciler) Reconcile(ctx context.Context,
 			return err
 		}
 
-		if err := r.ReconcileFileInS3Bucket(ctx, &bucket,
-			bucketStatus); err != nil {
-            log.Error(err, "Failed creating file in S3 bucket", "bucket", bucket)
-            return err
-        }
-
 	}
 	return nil
 }
@@ -104,10 +95,7 @@ func (r *S3Reconciler) Teardown(ctx context.Context,
 			bucketStatus); err != nil {
 			log.Error(err, "Failed to delete S3 Access Point", "bucket", bucket)
 		}
-		if err := r.DeleteFileInS3Bucket(ctx, &bucket,
-			bucketStatus); err != nil {
-			log.Error(err, "Failed to delete S3 Access Point", "bucket", bucket)
-		}
+
 	}
 	status.AWS.S3.Buckets = bucketStatuses
 	return nil
@@ -180,211 +168,6 @@ func (r *S3Reconciler) ReconcileS3AccessPoint(ctx context.Context,
 	} else {
 		return err
 	}
-}
-
-func (r *S3Reconciler) ReconcileFileInS3Bucket(ctx context.Context,
-	bucket *corev1alpha1.S3Bucket,
-	status *corev1alpha1.S3BucketStatus) error {
-
-	log := log.FromContext(ctx)
-
-	svc := s3.New(r.AWS.sess)
-
-	// Define an empty list of strings
-	var myList []string
-
-	// Check for existence of workspace catalog.json file
-	Cat_ID := strings.TrimSuffix(bucket.Path, "/")
-	Cat_Key := fmt.Sprintf("%s.json", Cat_ID)
-
-	if _, err := svc.HeadObject(&s3.HeadObjectInput{
-		Bucket: aws.String(bucket.Name),
-		Key:    aws.String(Cat_Key),
-	}); err != nil {
-		if aerr, ok := err.(awserr.Error); ok && aerr.Code() == "NotFound" {
-			myList = append(myList, Cat_Key)
-		} else {
-			return err
-		}
-	}
-
-	// Check for existence of workspace/processing-results catalog.json file
-	Cat_ID_proc := bucket.Path
-	Cat_Key_proc := fmt.Sprintf("%sprocessing-results.json", Cat_ID_proc)
-
-	if _, err := svc.HeadObject(&s3.HeadObjectInput{
-		Bucket: aws.String(bucket.Name),
-		Key:    aws.String(Cat_Key_proc),
-	}); err != nil {
-		if aerr, ok := err.(awserr.Error); ok && aerr.Code() == "NotFound" {
-			myList = append(myList, Cat_Key_proc)
-		} else {
-			return err
-		}
-	}
-
-	if len(myList) > 0 {
-		// Send request for these files via Pulsar
-		fmt.Println("Creating pulsar!")
-		// Create a Pulsar client
-		client, err := pulsar.NewClient(pulsar.ClientOptions{
-			URL: r.AWS.config.PulsarURL,
-		})
-
-		if err != nil {
-			return err
-		}
-
-		// Create a producer on the topic
-		producer, err := client.CreateProducer(pulsar.ProducerOptions{
-			Topic: "workspace-controller-catalogs",
-		})
-
-		if err != nil {
-			return err
-		}
-
-		// Create message
-		message_dict := map[string]interface{}{
-			"id": fmt.Sprintf("workspace-creation/%s", Cat_ID),
-			"workspace": Cat_ID,
-			"repository": "",
-			"branch": "main",
-			"bucket_name": bucket.Name,
-			"updated_keys": []string{},
-			"added_keys": myList,
-			"deleted_keys": []string{},
-			"source": Cat_ID,
-			"target": fmt.Sprintf("user-datasets/%s", Cat_ID),
-		}
-
-		// Convert map to JSON
-		jsonMessage, err := json.Marshal(message_dict)
-		if err != nil {
-			return err
-		}
-
-		// Send a message
-		_, err = producer.Send(context.Background(), &pulsar.ProducerMessage{
-			Payload: []byte(jsonMessage),
-		})
-
-		if err != nil {
-			return err
-		}
-
-		// Close the producer and client when no longer needed
-		producer.Close()
-		client.Close()
-
-		log.Info("Sent create command to transformer", "bucket", bucket.Name, "path", Cat_Key)
-
-	} else {
-		// myList is empty
-		log.Info("No new files to be created for workspace", "bucket", bucket.Name, "path", Cat_Key)
-	}
-	return nil
-}
-
-func (r *S3Reconciler) DeleteFileInS3Bucket(ctx context.Context,
-	bucket *corev1alpha1.S3Bucket,
-	status *corev1alpha1.S3BucketStatus) error {
-
-	log := log.FromContext(ctx)
-	svc := s3.New(r.AWS.sess)
-
-	// Define an empty list of strings
-	var myList []string
-
-	// Check for existence of workspace catalog.json file
-	Cat_ID := strings.TrimSuffix(bucket.Path, "/")
-	Cat_Key := fmt.Sprintf("%s.json", Cat_ID)
-
-	if _, err := svc.HeadObject(&s3.HeadObjectInput{
-		Bucket: aws.String(bucket.Name),
-		Key:    aws.String(Cat_Key),
-	}); err != nil {
-		return err
-	} else {
-		myList = append(myList, Cat_Key)
-	}
-
-	// Check for existence of workspace/processing-results catalog.json file
-	Cat_ID_proc := bucket.Path
-	Cat_Key_proc := fmt.Sprintf("%sprocessing-results.json", Cat_ID_proc)
-
-	if _, err := svc.HeadObject(&s3.HeadObjectInput{
-		Bucket: aws.String(bucket.Name),
-		Key:    aws.String(Cat_Key_proc),
-	}); err != nil {
-		return err
-	} else {
-		myList = append(myList, Cat_Key_proc)
-	}
-
-	if len(myList) > 0 {
-		// Send pulsar message to delete these catalogs
-		fmt.Println("Creating pulsar!")
-		// Create a Pulsar client
-		client, err := pulsar.NewClient(pulsar.ClientOptions{
-			URL: r.AWS.config.PulsarURL,
-		})
-
-		if err != nil {
-			return err
-		}
-
-		// Create a producer on the topic
-		producer, err := client.CreateProducer(pulsar.ProducerOptions{
-			Topic: "workspace-controller-catalogs",
-		})
-
-		if err != nil {
-			return err
-		}
-
-		// Create message
-		message_dict := map[string]interface{}{
-			"id": fmt.Sprintf("workspace-creation/%s", Cat_ID),
-			"workspace": Cat_ID,
-			"repository": "",
-			"branch": "main",
-			"bucket_name": bucket.Name,
-			"updated_keys": []string{},
-			"added_keys": []string{},
-			"deleted_keys": myList,
-			"source": Cat_ID,
-			"target": fmt.Sprintf("user-datasets/%s", Cat_ID),
-		}
-
-		// Convert map to JSON
-		jsonMessage, err := json.Marshal(message_dict)
-		if err != nil {
-			return err
-		}
-
-		// Send a message
-		_, err = producer.Send(context.Background(), &pulsar.ProducerMessage{
-			Payload: []byte(jsonMessage),
-		})
-
-		if err != nil {
-			return err
-		}
-
-		// Close the producer and client when no longer needed
-		producer.Close()
-		client.Close()
-
-		log.Info("Sent delete command to transformer", "bucket", bucket.Name, "path", Cat_Key)
-
-	} else {
-		// myList is empty
-		log.Info("No files to be deleted for workspace", "bucket", bucket.Name, "path", Cat_Key)
-	
-	}
-
-	return nil
 }
 
 func (r *S3Reconciler) DeleteS3AccessPoint(ctx context.Context,
