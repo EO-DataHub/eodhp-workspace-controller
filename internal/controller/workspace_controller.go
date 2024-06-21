@@ -149,6 +149,11 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context,
 		if _, err := r.UpdateStatus(ctx, req, sts); err != nil {
 			return ctrl.Result{}, err
 		}
+
+		if err := SendWorkspaceUpdateMessage(ctx, &ws.Spec, sts, r.config.AWS.PulsarURL); err != nil {
+			return ctrl.Result{}, err
+		}
+
 	} else {
 		// Workspace is being deleted, teardown dependents
 		for _, reconciler := range reverse(r.reconcilers) {
@@ -165,6 +170,10 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context,
 		}
 
 		if _, err := r.TeardownFinalizer(ctx, req); err != nil {
+			return ctrl.Result{}, err
+		}
+
+		if err := SendWorkspaceDeleteMessage(ctx, &ws.Spec, sts, r.config.AWS.PulsarURL); err != nil {
 			return ctrl.Result{}, err
 		}
 	}
