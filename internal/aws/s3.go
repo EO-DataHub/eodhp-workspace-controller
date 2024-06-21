@@ -190,7 +190,10 @@ func (r *S3Reconciler) ReconcileFileInS3Bucket(ctx context.Context,
 
 	svc := s3.New(r.AWS.sess)
 
-	// Create user-dataset catalog.json file
+	// Define an empty list of strings
+	var myList []string
+
+	// Check for existence of workspace catalog.json file
 	Cat_ID := strings.TrimSuffix(bucket.Path, "/")
 	Cat_Key := fmt.Sprintf("%s.json", Cat_ID)
 
@@ -199,77 +202,29 @@ func (r *S3Reconciler) ReconcileFileInS3Bucket(ctx context.Context,
 		Key:    aws.String(Cat_Key),
 	}); err != nil {
 		if aerr, ok := err.(awserr.Error); ok && aerr.Code() == "NotFound" {
-			// Path does not exist. Create it.
-
-			// Create catalog.json dictionary
-            catalog_dict := map[string]string{
-                "type": "Catalog",
-				"id": Cat_ID,
-				"title": fmt.Sprintf("%s Workspace Catalogue", Cat_ID),
-				"description": fmt.Sprintf("Data contained in the %s workspace", Cat_ID),
-				"stac_version": "1.0.0",
-            }
-
-			// Convert the dictionary to a JSON string
-            jsonData, err := json.Marshal(catalog_dict)
-			if err != nil {
-				return err
-			}
-
-			if _, err = svc.PutObject(&s3.PutObjectInput{
-				Bucket: aws.String(bucket.Name),
-				Key:    aws.String(Cat_Key),
-				Body:   aws.ReadSeekCloser(strings.NewReader(string(jsonData))),
-			}); err != nil {
-				return err
-			}
-
-			log.Info("Created Catalog.json file", "bucket", bucket.Name, "path", Cat_Key)
-			fmt.Println("Created catalog.json!")
+			myList = append(myList, Cat_Key)
+		} else {
+			return err
 		}
+	}
 
-		// Create processing-results catalog.json file
-		Cat_ID_proc := bucket.Path
-		Cat_Key_proc := fmt.Sprintf("%sprocessing-results.json", Cat_ID_proc)
+	// Check for existence of workspace/processing-results catalog.json file
+	Cat_ID_proc := bucket.Path
+	Cat_Key_proc := fmt.Sprintf("%sprocessing-results.json", Cat_ID_proc)
 
-		if _, err := svc.HeadObject(&s3.HeadObjectInput{
-			Bucket: aws.String(bucket.Name),
-			Key:    aws.String(Cat_Key_proc),
-		}); err != nil {
-			if aerr, ok := err.(awserr.Error); ok && aerr.Code() == "NotFound" {
-				// Path does not exist. Create it.
-
-				// Create catalog.json dictionary
-				catalog_dict := map[string]string{
-					"type": "Catalog",
-					"id": "processing-results",
-					"title": "Processing Result Catalogue",
-					"description": fmt.Sprintf("Workspace processing results contained in the %s workspace", strings.TrimSuffix(Cat_ID_proc, "/")),
-					"stac_version": "1.0.0",
-				}
-
-				// Convert the dictionary to a JSON string
-				jsonData, err := json.Marshal(catalog_dict)
-				if err != nil {
-					return err
-				}
-
-				if _, err = svc.PutObject(&s3.PutObjectInput{
-					Bucket: aws.String(bucket.Name),
-					Key:    aws.String(Cat_Key_proc),
-					Body:   aws.ReadSeekCloser(strings.NewReader(string(jsonData))),
-				}); err != nil {
-					return err
-				}
-
-				log.Info("Created workspace processing-results.json file", "bucket", bucket.Name, "path", Cat_Key_proc)
-
-			} else {
-				return err
-			}
+	if _, err := svc.HeadObject(&s3.HeadObjectInput{
+		Bucket: aws.String(bucket.Name),
+		Key:    aws.String(Cat_Key_proc),
+	}); err != nil {
+		if aerr, ok := err.(awserr.Error); ok && aerr.Code() == "NotFound" {
+			myList = append(myList, Cat_Key_proc)
+		} else {
+			return err
 		}
+	}
 
-		// Now we can trigger the ingestion of this catalog
+	if len(myList) > 0 {
+		// Send request for these files via Pulsar
 		fmt.Println("Creating pulsar!")
 		// Create a Pulsar client
 		client, err := pulsar.NewClient(pulsar.ClientOptions{
@@ -282,7 +237,7 @@ func (r *S3Reconciler) ReconcileFileInS3Bucket(ctx context.Context,
 
 		// Create a producer on the topic
 		producer, err := client.CreateProducer(pulsar.ProducerOptions{
-			Topic: "harvested",
+			Topic: "workspace-controller-catalogs",
 		})
 
 		if err != nil {
@@ -297,7 +252,7 @@ func (r *S3Reconciler) ReconcileFileInS3Bucket(ctx context.Context,
 			"branch": "main",
 			"bucket_name": bucket.Name,
 			"updated_keys": []string{},
-			"added_keys": []string{Cat_Key, Cat_Key_proc},
+			"added_keys": myList,
 			"deleted_keys": []string{},
 			"source": Cat_ID,
 			"target": fmt.Sprintf("user-datasets/%s", Cat_ID),
@@ -308,8 +263,6 @@ func (r *S3Reconciler) ReconcileFileInS3Bucket(ctx context.Context,
 		if err != nil {
 			return err
 		}
-
-		fmt.Println(jsonMessage)
 
 		// Send a message
 		_, err = producer.Send(context.Background(), &pulsar.ProducerMessage{
@@ -325,11 +278,11 @@ func (r *S3Reconciler) ReconcileFileInS3Bucket(ctx context.Context,
 		client.Close()
 
 		log.Info("Sent create command to transformer", "bucket", bucket.Name, "path", Cat_Key)
-	} else {
-		return err
-	}
 
-	status.Path = bucket.Path
+	} else {
+		// myList is empty
+		log.Info("No new files to be created for workspace", "bucket", bucket.Name, "path", Cat_Key)
+	}
 	return nil
 }
 
@@ -340,108 +293,96 @@ func (r *S3Reconciler) DeleteFileInS3Bucket(ctx context.Context,
 	log := log.FromContext(ctx)
 	svc := s3.New(r.AWS.sess)
 
+	// Define an empty list of strings
+	var myList []string
+
+	// Check for existence of workspace catalog.json file
 	Cat_ID := strings.TrimSuffix(bucket.Path, "/")
 	Cat_Key := fmt.Sprintf("%s.json", Cat_ID)
-	
+
+	if _, err := svc.HeadObject(&s3.HeadObjectInput{
+		Bucket: aws.String(bucket.Name),
+		Key:    aws.String(Cat_Key),
+	}); err != nil {
+		return err
+	} else {
+		myList = append(myList, Cat_Key)
+	}
+
+	// Check for existence of workspace/processing-results catalog.json file
 	Cat_ID_proc := bucket.Path
 	Cat_Key_proc := fmt.Sprintf("%sprocessing-results.json", Cat_ID_proc)
 
-	// Send pulsar message to delete these catalogs
-
-	// Commented for the time being as it seems unnecessary to delete entire catalog from resource catalog at this time
-	// fmt.Println("Creating pulsar!")
-
-	// // Now we can trigger the ingestion of this catalog
-	// // Create a Pulsar client
-	// client, err := pulsar.NewClient(pulsar.ClientOptions{
-	// 	URL: r.AWS.config.PulsarURL,
-	// })
-
-	// if err != nil {
-	// 	return err
-	// }
-
-	// // Create a producer on the topic
-	// producer, err := client.CreateProducer(pulsar.ProducerOptions{
-	// 	Topic: "harvested",
-	// })
-
-	// if err != nil {
-	// 	return err
-	// }
-
-	// // Create message
-	// message_dict := map[string]interface{}{
-	// 	"id": fmt.Sprintf("workspace-creation/%s", Cat_ID),
-	// 	"workspace": Cat_ID,
-	// 	"repository": "",
-	// 	"branch": "main",
-	// 	"bucket_name": bucket.Name,
-	// 	"updated_keys": []string{},
-	// 	"added_keys": []string{},
-	// 	"deleted_keys": []string{Cat_Key, Cat_Key_proc},
-	// 	"source": Cat_ID,
-	// 	"target": fmt.Sprintf("user-datasets/%s", Cat_ID),
-	// }
-
-	// // Convert map to JSON
-	// jsonMessage, err := json.Marshal(message_dict)
-	// if err != nil {
-	// 	return err
-	// }
-
-	// // Send a message
-	// _, err = producer.Send(context.Background(), &pulsar.ProducerMessage{
-	// 	Payload: []byte(jsonMessage),
-	// })
-
-	// if err != nil {
-	// 	return err
-	// }
-
-	// // Close the producer and client when no longer needed
-	// producer.Close()
-	// client.Close()
-
-	// log.Info("Sent delete command to transformer", "bucket", bucket.Name, "path", Cat_Key)
-
-	// Delete catalog files
-
-	// Delete workspace catalog.json file
-	_, err := svc.DeleteObject(&s3.DeleteObjectInput{
-		Bucket: aws.String(bucket.Name),
-		Key:    aws.String(Cat_Key),
-	})
-	if err != nil {
-		return err
-	}
-	
-	err = svc.WaitUntilObjectNotExists(&s3.HeadObjectInput{
-		Bucket: aws.String(bucket.Name),
-		Key:    aws.String(Cat_Key),
-	})
-	if err != nil {
-		return err
-	}
-	log.Info("Deleted Catalog.json file", "bucket", bucket.Name, "path", Cat_Key)
-
-	// Delete processing-results catalog.json file
-	_, err = svc.DeleteObject(&s3.DeleteObjectInput{
+	if _, err := svc.HeadObject(&s3.HeadObjectInput{
 		Bucket: aws.String(bucket.Name),
 		Key:    aws.String(Cat_Key_proc),
-	})
-	if err != nil {
+	}); err != nil {
 		return err
+	} else {
+		myList = append(myList, Cat_Key_proc)
 	}
+
+	if len(myList) > 0 {
+		// Send pulsar message to delete these catalogs
+		fmt.Println("Creating pulsar!")
+		// Create a Pulsar client
+		client, err := pulsar.NewClient(pulsar.ClientOptions{
+			URL: r.AWS.config.PulsarURL,
+		})
+
+		if err != nil {
+			return err
+		}
+
+		// Create a producer on the topic
+		producer, err := client.CreateProducer(pulsar.ProducerOptions{
+			Topic: "workspace-controller-catalogs",
+		})
+
+		if err != nil {
+			return err
+		}
+
+		// Create message
+		message_dict := map[string]interface{}{
+			"id": fmt.Sprintf("workspace-creation/%s", Cat_ID),
+			"workspace": Cat_ID,
+			"repository": "",
+			"branch": "main",
+			"bucket_name": bucket.Name,
+			"updated_keys": []string{},
+			"added_keys": []string{},
+			"deleted_keys": myList,
+			"source": Cat_ID,
+			"target": fmt.Sprintf("user-datasets/%s", Cat_ID),
+		}
+
+		// Convert map to JSON
+		jsonMessage, err := json.Marshal(message_dict)
+		if err != nil {
+			return err
+		}
+
+		// Send a message
+		_, err = producer.Send(context.Background(), &pulsar.ProducerMessage{
+			Payload: []byte(jsonMessage),
+		})
+
+		if err != nil {
+			return err
+		}
+
+		// Close the producer and client when no longer needed
+		producer.Close()
+		client.Close()
+
+		log.Info("Sent delete command to transformer", "bucket", bucket.Name, "path", Cat_Key)
+
+	} else {
+		// myList is empty
+		log.Info("No files to be deleted for workspace", "bucket", bucket.Name, "path", Cat_Key)
 	
-	err = svc.WaitUntilObjectNotExists(&s3.HeadObjectInput{
-		Bucket: aws.String(bucket.Name),
-		Key:    aws.String(Cat_Key_proc),
-	})
-	if err != nil {
-		return err
 	}
-	log.Info("Deleted workspace processing-results.json file", "bucket", bucket.Name, "path", Cat_Key_proc)
 
 	return nil
 }
