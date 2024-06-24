@@ -28,12 +28,11 @@ type AWSConfig struct {
 	Region    string `yaml:"region"`
 	OIDC      struct {
 		Provider string `yaml:"provider"`
-	}
-	URL string `yaml:"url"`
+	} `yaml:"odic"`
+	URL                string `yaml:"url"`
 	RecordHostedZoneID string `yaml:"recordHostedZoneID"`
-	DNSName string `yaml:"dnsName"`
-	AliasHostedZoneID string `yaml:"aliasHostedZoneID"`
-	PulsarURL string `yaml:"pulsarURL"`
+	DNSName            string `yaml:"dnsName"`
+	AliasHostedZoneID  string `yaml:"aliasHostedZoneID"`
 }
 
 type AWSClient struct {

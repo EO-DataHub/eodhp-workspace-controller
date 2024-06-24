@@ -19,132 +19,79 @@ package controller
 import (
 	"context"
 	"encoding/json"
+	"log"
 
 	corev1alpha1 "github.com/UKEODHP/workspace-controller/api/v1alpha1"
 	"github.com/apache/pulsar-client-go/pulsar"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-type EventsReconciler struct {
-	Client
+type EventsClient struct {
+	pulsar   pulsar.Client
+	producer pulsar.Producer
+	queue    chan Event
 }
 
+type Event struct {
+	Event  string
+	Spec   corev1alpha1.WorkspaceSpec
+	Status corev1alpha1.WorkspaceStatus
+}
 
-func SendWorkspaceUpdateMessage(ctx context.Context,
-	spec *corev1alpha1.WorkspaceSpec,
-	status *corev1alpha1.WorkspaceStatus,
-	pulsarURL string,) error {
+func (e *Event) ToJSON(event Event) ([]byte, error) {
+	// Convert struct to JSON
+	jsonMessage, err := json.Marshal(e)
+	if err != nil {
+		return nil, err
+	}
 
-	log := log.FromContext(ctx)
+	return jsonMessage, nil
+}
 
-	// Send request to create these files via Pulsar
-	log.Info("Creating pulsar!")
-	// Create a Pulsar client
+func NewEventsClient(pulsarURL, topic string) (*EventsClient, error) {
 	client, err := pulsar.NewClient(pulsar.ClientOptions{
 		URL: pulsarURL,
 	})
 
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Create a producer on the topic
 	producer, err := client.CreateProducer(pulsar.ProducerOptions{
-		Topic: "workspace-controller",
+		Topic: topic,
 	})
 
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	// Construct output message
-	combined := map[string]interface{}{
-		"spec":   spec,
-		"status": status,
-		"event": "update",
-	}
-	
-	// Convert map to JSON
-	jsonMessage, err := json.Marshal(combined)
-	if err != nil {
-		return err
-	}
+	return &EventsClient{
+		pulsar:   client,
+		producer: producer,
+		queue:    make(chan Event)}, nil
+}
 
-
-	// Send a message
-	_, err = producer.Send(context.Background(), &pulsar.ProducerMessage{
-		Payload: []byte(jsonMessage),
-	})
-
-	if err != nil {
-		return err
-	}
-
-	// Close the producer and client when no longer needed
-	producer.Close()
-	client.Close()
-
-	log.Info("Sent create command to transformer")
-
+func (c *EventsClient) Notify(message Event) error {
+	c.queue <- message
 	return nil
 }
 
-func SendWorkspaceDeleteMessage(ctx context.Context,
-	spec *corev1alpha1.WorkspaceSpec,
-	status *corev1alpha1.WorkspaceStatus,
-	pulsarURL string,) error {
-
-	log := log.FromContext(ctx)
-
-	// Send request to delete these files via Pulsar
-	log.Info("Creating pulsar!")
-
-	// Create a Pulsar client
-	client, err := pulsar.NewClient(pulsar.ClientOptions{
-		URL: pulsarURL,
-	})
-
-	if err != nil {
-		return err
+func (c *EventsClient) Listen() {
+	for event := range c.queue {
+		// Convert map to JSON
+		if jsonMessage, err := json.Marshal(event); err == nil {
+			// Send a message
+			if _, err := c.producer.Send(context.Background(),
+				&pulsar.ProducerMessage{Payload: []byte(jsonMessage)}); err != nil {
+				log.Printf("Failed to send message: %v", err)
+			}
+		} else {
+			log.Printf("Failed to marshal message: %v", err)
+		}
 	}
+}
 
-	// Create a producer on the topic
-	producer, err := client.CreateProducer(pulsar.ProducerOptions{
-		Topic: "workspace-controller",
-	})
-
-	if err != nil {
-		return err
-	}
-
-	// Construct output message
-	combined := map[string]interface{}{
-		"spec":   spec,
-		"status": status,
-		"event": "delete",
-	}
-	
-	// Convert map to JSON
-	jsonMessage, err := json.Marshal(combined)
-	if err != nil {
-		return err
-	}
-
-
-	// Send a message
-	_, err = producer.Send(context.Background(), &pulsar.ProducerMessage{
-		Payload: []byte(jsonMessage),
-	})
-
-	if err != nil {
-		return err
-	}
-
-	// Close the producer and client when no longer needed
-	producer.Close()
-	client.Close()
-
-	log.Info("Sent create command to transformer")
-
-	return nil
+func (c *EventsClient) Close() {
+	c.producer.Close()
+	c.pulsar.Close()
 }
