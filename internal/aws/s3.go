@@ -95,6 +95,7 @@ func (r *S3Reconciler) Teardown(ctx context.Context,
 			bucketStatus); err != nil {
 			log.Error(err, "Failed to delete S3 Access Point", "bucket", bucket)
 		}
+
 	}
 	status.AWS.S3.Buckets = bucketStatuses
 	return nil

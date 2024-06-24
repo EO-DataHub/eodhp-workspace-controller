@@ -40,7 +40,6 @@ func (r *Route53Reconciler) Reconcile(ctx context.Context,
 
 	// Construct the Route53 URL
 	url := fmt.Sprintf("%s.%s", spec.Namespace, r.AWS.config.URL)
-	
 
 	// Create a new Route53 client
 	svc := route53.New(r.AWS.sess)
@@ -90,7 +89,7 @@ func (r *Route53Reconciler) Teardown(ctx context.Context,
 				{
 					Action: aws.String(route53.ChangeActionDelete),
 					ResourceRecordSet: &route53.ResourceRecordSet{
-						Name: aws.String(url), // Replace with your desired record name
+						Name: aws.String(url),             // Replace with your desired record name
 						Type: aws.String(route53.RRTypeA), // Replace with your desired record type
 						AliasTarget: &route53.AliasTarget{ // Use AliasTarget instead of ResourceRecords
 							DNSName:              aws.String(r.AWS.config.DNSName),

@@ -40,10 +40,11 @@ type WorkspaceReconciler struct {
 	aws         aws.AWSClient
 	reconcilers []Reconciler
 	finalizer   string
+	events      *EventsClient
 }
 
 func NewWorkspaceReconciler(client Client, scheme *runtime.Scheme,
-	config Config) *WorkspaceReconciler {
+	config Config, events *EventsClient) *WorkspaceReconciler {
 
 	awsClient := aws.AWSClient{}
 	if config.AWS.Region != "" {
@@ -72,6 +73,7 @@ func NewWorkspaceReconciler(client Client, scheme *runtime.Scheme,
 			&RoleBindingReconciler{Client: client},
 		},
 		finalizer: "core.telespazio-uk.io/workspace-finalizer",
+		events:    events,
 	}
 }
 
@@ -149,6 +151,17 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context,
 		if _, err := r.UpdateStatus(ctx, req, sts); err != nil {
 			return ctrl.Result{}, err
 		}
+
+		if r.events != nil {
+			// Send update notification
+			if err := r.events.Notify(Event{
+				Event:  "update",
+				Spec:   ws.Spec,
+				Status: *sts,
+			}); err != nil {
+				return ctrl.Result{}, err
+			}
+		}
 	} else {
 		// Workspace is being deleted, teardown dependents
 		for _, reconciler := range reverse(r.reconcilers) {
@@ -166,6 +179,17 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context,
 
 		if _, err := r.TeardownFinalizer(ctx, req); err != nil {
 			return ctrl.Result{}, err
+		}
+
+		if r.events != nil {
+			// Send delete notification
+			if err := r.events.Notify(Event{
+				Event:  "delete",
+				Spec:   ws.Spec,
+				Status: *sts,
+			}); err != nil {
+				return ctrl.Result{}, err
+			}
 		}
 	}
 
@@ -243,7 +267,10 @@ func (r *WorkspaceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 type Config struct {
-	AWS aws.AWSConfig `yaml:"aws"`
+	AWS    aws.AWSConfig `yaml:"aws"`
+	Pulsar struct {
+		URL string `yaml:"url"`
+	} `yaml:"pulsar"`
 }
 
 func (c *Config) Load(path string) error {
