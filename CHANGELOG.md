@@ -1,5 +1,9 @@
 # Workspace Controller
 
+## v0.4.0 (03-07-2024)
+
+- Added workspace update/delete events
+
 ## v0.3.0 (15-05-2024)
 
 - Added S3 access point support
