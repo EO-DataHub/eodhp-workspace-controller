@@ -131,5 +131,5 @@ roleRef:
   name: '{{ include "workspace-operator.fullname" . }}-manager-role'
 subjects:
 - kind: ServiceAccount
-  name: '{{ include "workspace-operator.fullname" . }}-controller-manager'
+  name: '{{ include "workspace-operator.serviceAccountName" . }}'
   namespace: '{{ .Release.Namespace }}'
