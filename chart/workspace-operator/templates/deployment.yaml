@@ -73,5 +73,5 @@ spec:
             name: {{ include "workspace-operator.fullname" . }}-config
       securityContext:
         runAsNonRoot: true
-      serviceAccountName: {{ include "workspace-operator.fullname" . }}-controller-manager
+      serviceAccountName: {{ include "workspace-operator.serviceAccountName" . }}
       terminationGracePeriodSeconds: 10

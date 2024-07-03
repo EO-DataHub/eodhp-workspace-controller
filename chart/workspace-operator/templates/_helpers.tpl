@@ -54,9 +54,5 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 Create the name of the service account to use
 */}}
 {{- define "workspace-operator.serviceAccountName" -}}
-{{- if .Values.serviceAccount.create }}
-{{- default (include "workspace-operator.fullname" .) .Values.serviceAccount.name }}
-{{- else }}
-{{- default "default" .Values.serviceAccount.name }}
-{{- end }}
+{{- default "workspace-controller" .Values.controllerManager.serviceAccount.name }}
 {{- end }}
