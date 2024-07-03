@@ -63,8 +63,7 @@ To publish the Helm chart:
 
 ```bash
 helm package chart/workspace-operator
-aws ecr-public get-login-password --region us-east-1 | helm registry login --username AWS --password-stdin public
-.ecr.aws/n1b3o1k2
+aws ecr-public get-login-password --region us-east-1 | helm registry login --username AWS --password-stdin public.ecr.aws
 helm push workspace-operator-x.y.z.tgz oci://public.ecr.aws/n1b3o1k2/helm
 ```
 
