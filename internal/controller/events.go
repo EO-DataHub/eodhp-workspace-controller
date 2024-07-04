@@ -32,9 +32,9 @@ type EventsClient struct {
 }
 
 type Event struct {
-	Event  string
-	Spec   corev1alpha1.WorkspaceSpec
-	Status corev1alpha1.WorkspaceStatus
+	Event  string                       `json:"event"`
+	Spec   corev1alpha1.WorkspaceSpec   `json:"spec"`
+	Status corev1alpha1.WorkspaceStatus `json:"status"`
 }
 
 func (e *Event) ToJSON(event Event) ([]byte, error) {
