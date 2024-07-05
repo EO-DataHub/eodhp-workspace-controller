@@ -28,7 +28,7 @@ type AWSConfig struct {
 	Region    string `yaml:"region"`
 	OIDC      struct {
 		Provider string `yaml:"provider"`
-	} `yaml:"odic"`
+	} `yaml:"oidc"`
 	URL                string `yaml:"url"`
 	RecordHostedZoneID string `yaml:"recordHostedZoneID"`
 	DNSName            string `yaml:"dnsName"`
