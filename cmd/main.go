@@ -141,7 +141,7 @@ func main() {
 	// Create event client if pulsar URL is provided
 	var events *controller.EventsClient
 	if c.Pulsar.URL != "" {
-		events, err := controller.NewEventsClient(
+		events, err = controller.NewEventsClient(
 			c.Pulsar.URL, "workspace-controller")
 		if err != nil {
 			setupLog.Error(err, "could not create messaging client")
