@@ -103,8 +103,7 @@ func main() {
 			setupLog.Error(err, "Problem loading config file")
 			os.Exit(1)
 		} else {
-			setupLog.Info("Config loaded successfully", "config", configPath)
-
+			setupLog.Info("Config loaded successfully", "path", configPath, "config", c)
 		}
 	} else {
 		setupLog.Info("No config file provided. Use --config flag to provide a path to a config file.")
