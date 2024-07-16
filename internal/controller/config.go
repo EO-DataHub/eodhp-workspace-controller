@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
 
 	corev1alpha1 "github.com/UKEODHP/workspace-controller/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
@@ -111,7 +112,7 @@ func (r *ConfigReconciler) Teardown(ctx context.Context,
 }
 
 func (r *ConfigReconciler) createConfigData(
-	_ *corev1alpha1.WorkspaceSpec,
+	spec *corev1alpha1.WorkspaceSpec,
 	status *corev1alpha1.WorkspaceStatus) (map[string]string, error) {
 
 	data := make(map[string]string)
@@ -120,6 +121,32 @@ func (r *ConfigReconciler) createConfigData(
 		data[bucket.EnvVar] = bucket.AccessPointARN
 	}
 
+	type PVCMap struct {
+		PVCName       string `json:"pvcName"`
+		RootDirectory string `json:"rootDirectory"`
+	}
+	var pvcMaps []PVCMap
+	for _, pvc := range spec.Storage.PersistentVolumeClaims {
+		for _, pv := range spec.Storage.PersistentVolumes {
+			if pv.Name == pvc.PVName {
+				for _, ap := range spec.AWS.EFS.AccessPoints {
+					if ap.Name == pv.VolumeSource.AccessPointName {
+						pvcMaps = append(pvcMaps, PVCMap{
+							PVCName:       pvc.Name,
+							RootDirectory: ap.RootDirectory,
+						})
+						break
+					}
+				}
+				break
+			}
+		}
+	}
+	pvcMapsJSON, err := json.Marshal(pvcMaps)
+	if err != nil {
+		return nil, err
+	}
+	data["pvcs"] = string(pvcMapsJSON)
 	return data, nil
 }
 
