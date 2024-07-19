@@ -122,25 +122,15 @@ func (r *ConfigReconciler) createConfigData(
 	}
 
 	type PVCMap struct {
-		PVCName       string `json:"pvcName"`
-		RootDirectory string `json:"rootDirectory"`
+		PVCName string `json:"pvcName"`
+		PVName  string `json:"pvName"`
 	}
 	var pvcMaps []PVCMap
 	for _, pvc := range spec.Storage.PersistentVolumeClaims {
-		for _, pv := range spec.Storage.PersistentVolumes {
-			if pv.Name == pvc.PVName {
-				for _, ap := range spec.AWS.EFS.AccessPoints {
-					if ap.Name == pv.VolumeSource.AccessPointName {
-						pvcMaps = append(pvcMaps, PVCMap{
-							PVCName:       pvc.Name,
-							RootDirectory: ap.RootDirectory,
-						})
-						break
-					}
-				}
-				break
-			}
-		}
+		pvcMaps = append(pvcMaps, PVCMap{
+			PVCName: pvc.Name,
+			PVName:  pvc.PVName,
+		})
 	}
 	pvcMapsJSON, err := json.Marshal(pvcMaps)
 	if err != nil {
