@@ -26,16 +26,13 @@ import (
 type AWSConfig struct {
 	AccountID string `yaml:"accountID"`
 	Region    string `yaml:"region"`
-	Auth      struct {
-		AccessKey string `yaml:"accessKey"`
-		SecretKey string `yaml:"secretKey"`
-	} `yaml:"auth"`
-	OIDC struct {
+	OIDC      struct {
 		Provider string `yaml:"provider"`
-	}
-	Storage struct {
-		EFSID string `yaml:"efsID"`
-	}
+	} `yaml:"oidc"`
+	URL                string `yaml:"url"`
+	RecordHostedZoneID string `yaml:"recordHostedZoneID"`
+	DNSName            string `yaml:"dnsName"`
+	AliasHostedZoneID  string `yaml:"aliasHostedZoneID"`
 }
 
 type AWSClient struct {

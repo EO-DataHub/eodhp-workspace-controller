@@ -18,9 +18,10 @@ make run  # run a local instance of the controller
 ## Run in Cluster
 
 ```bash
+make manifests  # generate the latest manifests
 make install  # installs CRDs to the cluster
-make docker-build docker-push IMG=<some-registry>/<project-name>:tag  # build controller
-make deploy IMG=<some-registry>/<project-name>:tag  # deploy controller to cluster
+make docker-build docker-push IMG=public.ecr.aws/n1b3o1k2/workspace-controller:<tag> # build and push 
+make deploy IMG=public.ecr.aws/n1b3o1k2/workspace-controller:<tag>  # deploy controller to cluster
 ```
 
 ## Uninstall
@@ -33,7 +34,7 @@ make undeploy  # remove controller from the cluster
 ## Install CRDs
 
 ```bash
-make manifests  # generate the CRDs
+make install # installs CRDs to the cluster
 ```
 
 ## Development
@@ -48,6 +49,24 @@ make  # regenerate the code
 make install  # install the CRDs to the cluster
 ```
 
+### Generate Helm Chart
+
+To update the Helm chart:
+
+```bash
+make helm CHART=chart/workspace-operator
+```
+
+__Be careful not to overwrite manual changes to the Helm manifests. Always commit to Git just before applying `make helm` and compare changes, reverting the change where the modification undoes manual changes.__
+
+To publish the Helm chart:
+
+```bash
+helm package chart/workspace-operator
+aws ecr-public get-login-password --region us-east-1 | helm registry login --username AWS --password-stdin public.ecr.aws
+helm push workspace-operator-x.y.z.tgz oci://public.ecr.aws/n1b3o1k2/helm
+```
+
 ## Manually Export Manifests
 
 ```bash
@@ -60,19 +79,11 @@ kustomize build config/default > manifests.yaml  # all other manifests
 A file path with following parameters is required to be passed to the operator with `--config <path>` flag.
 
 ```yaml
-clusterName: my-cluster
-storage:
-  defaultSize: 4Gi
 aws:
   accountID: 123456789
   region: eu-west-2
-  auth:
-    accessKey: access-key
-    secretKey: secret-key
   oidc:
     provider: oidc.eks.my-region.amazonaws.com/id/A1B2C3D4E5F6G7H8
-  storage:
-    efsID: fs-abc123def456
 ```
 
 
