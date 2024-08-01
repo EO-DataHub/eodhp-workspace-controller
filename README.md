@@ -74,3 +74,17 @@ aws:
   storage:
     efsID: fs-abc123def456
 ```
+
+
+# Install via makefile
+
+```commandline
+make setup
+```
+
+This will create a virtual environment called `venv`, and install the Python
+and Node dependencies and install `pre-commit`.
+
+After `make setup` you can run `pre-commit` to run pre-commit checks on staged changes and
+`pre-commit run --all-files` to run them on all files. This replicates the linter checks that
+run from GitHub actions.
