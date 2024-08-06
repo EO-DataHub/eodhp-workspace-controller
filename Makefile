@@ -196,17 +196,3 @@ GOBIN=$(LOCALBIN) go install $${package} ;\
 mv "$$(echo "$(1)" | sed "s/-$(3)$$//")" $(1) ;\
 }
 endef
-
-
-venv:
-	virtualenv -p python3.11 venv
-	./venv/bin/python -m ensurepip -U
-	./venv/bin/pip3 install pip-tools
-	./venv/bin/pip3 install pre-commit
-
-.git/hooks/pre-commit:
-	./venv/bin/pre-commit install
-    curl -o .pre-commit-config.yaml https://raw.githubusercontent.com/EO-DataHub/github-actions/main/.pre-commit-config-go.yaml
-
-setup: venv .git/hooks/pre-commit
-
