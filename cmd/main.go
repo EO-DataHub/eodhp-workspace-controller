@@ -103,8 +103,7 @@ func main() {
 			setupLog.Error(err, "Problem loading config file")
 			os.Exit(1)
 		} else {
-			setupLog.Info("Config loaded successfully", "config", configPath)
-
+			setupLog.Info("Config loaded successfully", "path", configPath, "config", c)
 		}
 	} else {
 		setupLog.Info("No config file provided. Use --config flag to provide a path to a config file.")
@@ -138,8 +137,22 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Create event client if pulsar URL is provided
+	var events *controller.EventsClient
+	if c.Pulsar.URL != "" {
+		events, err = controller.NewEventsClient(
+			c.Pulsar.URL, "workspace-controller")
+		if err != nil {
+			setupLog.Error(err, "could not create messaging client")
+			os.Exit(1)
+		}
+		defer events.Close()
+		// Start listening for events in background
+		go events.Listen()
+	}
+
 	if err = controller.NewWorkspaceReconciler(
-		mgr.GetClient(), mgr.GetScheme(), c,
+		controller.Client{Client: mgr.GetClient()}, mgr.GetScheme(), c, events,
 	).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Workspace")
 		os.Exit(1)

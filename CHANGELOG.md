@@ -1,6 +1,15 @@
 # Workspace Controller
 
-## v0.2.0 (07-05-2024)
+## v0.4.0 (03-07-2024)
+
+- Added workspace update/delete events
+
+## v0.3.0 (15-05-2024)
+
+- Added S3 access point support
+- Refactored main loop to cycle through reconcilers
+
+## v0.2.1 (07-05-2024)
 
 - Added AWS client package
   - Added workspace IAM policy reconciler
