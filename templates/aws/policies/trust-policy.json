@@ -14,6 +14,13 @@
                     "{{.oidc.provider}}:sub": "system:serviceaccount:{{.namespace}}:{{.serviceAccount}}"
                 }
             }
+        },
+        {
+            "Effect": "Allow",
+            "Principal": {
+                "AWS": "arn:aws:iam::{{.accountID}}:role/eodhp-dev-workspace-services-role"
+            },
+            "Action": "sts:AssumeRole"
         }
     ]
 }

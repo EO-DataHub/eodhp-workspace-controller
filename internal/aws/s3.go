@@ -25,6 +25,7 @@ import (
 	corev1alpha1 "github.com/UKEODHP/workspace-controller/api/v1alpha1"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3control"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -70,6 +71,11 @@ func (r *S3Reconciler) Reconcile(ctx context.Context,
 			log.Error(err, "Failed attaching S3 Access Point Policy",
 				"bucket", bucket)
 			return err
+		}
+
+		if err := r.AttachS3PolicyToRole(ctx, &bucket, bucketStatus, status.AWS.Role.Name); err != nil {
+			log.Error(err, "Failed attaching S3 Policy to role",
+				"role", status.AWS.Role.Name)
 		}
 
 	}
@@ -249,6 +255,48 @@ func (r *S3Reconciler) AttachPolicyToS3AccessPoint(ctx context.Context,
 		} else {
 			return err
 		}
+	}
+	return nil
+}
+
+func (r *S3Reconciler) AttachS3PolicyToRole(ctx context.Context,
+	bucket *corev1alpha1.S3Bucket,
+	status *corev1alpha1.S3BucketStatus,
+	roleName string) error {
+
+	log := log.FromContext(ctx)
+	svc := iam.New(r.AWS.sess)
+
+	// Add inline policy document to the role
+	policyTemplate, err := os.ReadFile("../templates/aws/policies/s3-workspace-policy.json")
+	if err != nil {
+		return err
+	}
+	tmpl, err := template.New("s3-workspace-policy").Parse(string(policyTemplate))
+	if err != nil {
+		return err
+	}
+
+	rolePolicyDocument := new(strings.Builder)
+	if err := tmpl.Execute(rolePolicyDocument, map[string]any{
+		"accessPointName": bucket.AccessPointName,
+		"bucketName":      bucket.Name,
+		"accountID":       r.AWS.config.AccountID,
+		"region":          r.AWS.config.Region,
+		"path":            bucket.Path,
+	}); err != nil {
+		return err
+	}
+
+	// Attach inline policy to the role
+	_, err = svc.PutRolePolicy(&iam.PutRolePolicyInput{
+		RoleName:       aws.String(roleName),
+		PolicyName:     aws.String(roleName + "-s3"),
+		PolicyDocument: aws.String(rolePolicyDocument.String()),
+	})
+	if err != nil {
+		log.Error(err, "Failed to attach inline policy to role", "role", roleName)
+		return err
 	}
 	return nil
 }
