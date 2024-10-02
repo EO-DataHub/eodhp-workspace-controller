@@ -102,6 +102,12 @@ func (r *S3Reconciler) Teardown(ctx context.Context,
 			log.Error(err, "Failed to delete S3 Access Point", "bucket", bucket)
 		}
 
+		if status.AWS.Role.Name != "" {
+			if err := r.DeleteS3PolicyFromRole(ctx, &bucket, status.AWS.Role.Name); err != nil {
+				log.Error(err, "Failed to delete S3 Policy from role", "bucket", bucket, "role", status.AWS.Role.Name)
+			}
+		}
+
 	}
 	status.AWS.S3.Buckets = bucketStatuses
 	return nil
@@ -200,6 +206,29 @@ func (r *S3Reconciler) DeleteS3AccessPoint(ctx context.Context,
 			return err
 		}
 	}
+}
+
+func (r *S3Reconciler) DeleteS3PolicyFromRole(ctx context.Context,
+	bucket *corev1alpha1.S3Bucket,
+	roleName string) error {
+
+	log := log.FromContext(ctx)
+	svc := iam.New(r.AWS.sess)
+
+	policyName := roleName + "-s3"
+
+	// Delete the inline policy from the IAM role
+	_, err := svc.DeleteRolePolicy(&iam.DeleteRolePolicyInput{
+		RoleName:   aws.String(roleName),
+		PolicyName: aws.String(policyName),
+	})
+	if err != nil {
+		log.Error(err, "Failed to delete s3 inline policy from role", "policyName", policyName, "role", roleName)
+		return err
+	}
+
+	log.Info("Deleted inline policy from role", "policyName", policyName, "role", roleName)
+	return nil
 }
 
 func (r *S3Reconciler) AttachPolicyToS3AccessPoint(ctx context.Context,
