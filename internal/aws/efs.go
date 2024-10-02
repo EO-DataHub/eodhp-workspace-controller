@@ -90,8 +90,16 @@ func (r *EFSReconciler) Teardown(ctx context.Context,
 				log.Info("Deleted EFS Role Policy", "policy", &efsStatus.Name,
 					"role", &status.AWS.Role.Name)
 			} else {
-				log.Error(err, "Failed to delete EFS Role Policy",
-					"policy", &efsStatus.Name, "role", &status.AWS.Role.Name)
+				// Check if it's a NoSuchEntity error - should not be fatal
+				if aerr, ok := err.(awserr.Error); ok && aerr.Code() == iam.ErrCodeNoSuchEntityException {
+					log.Info("EFS Role Policy already deleted", "policy", &efsStatus.Name,
+						"role", &status.AWS.Role.Name)
+				} else {
+					// For any other error, log it and return
+					log.Error(err, "Failed to delete EFS Role Policy",
+						"policy", &efsStatus.Name, "role", &status.AWS.Role.Name)
+					return err
+				}
 			}
 
 		}
@@ -204,12 +212,12 @@ func (r *EFSReconciler) ReconcileEFSRolePolicy(ctx context.Context,
 	}
 
 	// Create policy.
-	policyDoumentTemplate, err := os.ReadFile(
+	policyDocumentTemplate, err := os.ReadFile(
 		"../templates/aws/policies/efs-policy.json")
 	if err != nil {
 		return err
 	}
-	tmpl, err := template.New("efs-policy").Parse(string(policyDoumentTemplate))
+	tmpl, err := template.New("efs-policy").Parse(string(policyDocumentTemplate))
 	if err != nil {
 		return err
 	}
