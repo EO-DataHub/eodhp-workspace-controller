@@ -67,14 +67,26 @@ func (r *NamespaceReconciler) Teardown(ctx context.Context,
 	namespace := &corev1.Namespace{}
 	if err := r.Get(ctx, client.ObjectKey{Name: spec.Namespace},
 		namespace); err == nil {
-		if !namespace.ObjectMeta.DeletionTimestamp.IsZero() {
-			// Already being deleted
-			return nil
-		}
-		// Delete namespace
-		if err := r.DeleteResource(ctx, namespace); err != nil {
+
+		// Check if any workspaces are still using this namespace
+		workspaces := &corev1alpha1.WorkspaceList{}
+		err := r.List(ctx, workspaces, client.InNamespace(spec.Namespace))
+		if err != nil {
 			return err
 		}
+
+		// If there are no workspaces in the namespace, delete it
+		if len(workspaces.Items) == 0 {
+			if !namespace.ObjectMeta.DeletionTimestamp.IsZero() {
+				// Already being deleted
+				return nil
+			}
+			// Delete namespace
+			if err := r.DeleteResource(ctx, namespace); err != nil {
+				return err
+			}
+		}
+
 	} else {
 		if !errors.IsNotFound(err) {
 			return err
