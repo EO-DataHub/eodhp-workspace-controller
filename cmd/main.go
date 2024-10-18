@@ -35,8 +35,8 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	corev1alpha1 "github.com/UKEODHP/workspace-controller/api/v1alpha1"
-	"github.com/UKEODHP/workspace-controller/internal/controller"
+	corev1alpha1 "github.com/EO-DataHub/eodhp-workspace-controller/api/v1alpha1"
+	"github.com/EO-DataHub/eodhp-workspace-controller/internal/controller"
 	//+kubebuilder:scaffold:imports
 )
 
