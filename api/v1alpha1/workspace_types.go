@@ -58,6 +58,16 @@ type WorkspaceSpec struct {
 	ServiceAccount ServiceAccountSpec `json:"serviceAccount,omitempty"`
 	// Storage
 	Storage StorageSpec `json:"storage,omitempty"`
+	// Account associated with the workspace
+	Account string `json:"account,omitempty"`
+	// Owner of the account
+	AccountOwner string `json:"accountOwner,omitempty"`
+	// Authorization details for the workspace
+	Authorization AuthorizationSpec `json:"authorization,omitempty"`
+}
+
+type AuthorizationSpec struct {
+	MemberGroup string `json:"memberGroup,omitempty"`
 }
 
 type StorageSpec struct {
