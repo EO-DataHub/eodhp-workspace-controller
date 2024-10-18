@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 
-	corev1alpha1 "github.com/UKEODHP/workspace-controller/api/v1alpha1"
+	corev1alpha1 "github.com/EO-DataHub/eodhp-workspace-controller/api/v1alpha1"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/route53"
 	"sigs.k8s.io/controller-runtime/pkg/client"

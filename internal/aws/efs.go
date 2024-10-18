@@ -22,7 +22,7 @@ import (
 	"os"
 	"strings"
 
-	corev1alpha1 "github.com/UKEODHP/workspace-controller/api/v1alpha1"
+	corev1alpha1 "github.com/EO-DataHub/eodhp-workspace-controller/api/v1alpha1"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/efs"

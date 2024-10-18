@@ -19,7 +19,7 @@ package controller
 import (
 	"context"
 
-	corev1alpha1 "github.com/UKEODHP/workspace-controller/api/v1alpha1"
+	corev1alpha1 "github.com/EO-DataHub/eodhp-workspace-controller/api/v1alpha1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"

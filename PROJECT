@@ -6,7 +6,7 @@ domain: telespazio-uk.io
 layout:
 - go.kubebuilder.io/v4
 projectName: workspace-operator
-repo: github.com/UKEODHP/workspace-controller
+repo: github.com/EO-DataHub/eodhp-workspace-controller
 resources:
 - api:
     crdVersion: v1
@@ -15,6 +15,6 @@ resources:
   domain: telespazio-uk.io
   group: core
   kind: Workspace
-  path: github.com/UKEODHP/workspace-controller/api/v1alpha1
+  path: github.com/EO-DataHub/eodhp-workspace-controller/api/v1alpha1
   version: v1alpha1
 version: "3"

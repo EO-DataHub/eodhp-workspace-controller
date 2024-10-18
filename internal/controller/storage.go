@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 
-	corev1alpha1 "github.com/UKEODHP/workspace-controller/api/v1alpha1"
+	corev1alpha1 "github.com/EO-DataHub/eodhp-workspace-controller/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"

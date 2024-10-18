@@ -21,8 +21,8 @@ import (
 	"os"
 	"reflect"
 
-	corev1alpha1 "github.com/UKEODHP/workspace-controller/api/v1alpha1"
-	"github.com/UKEODHP/workspace-controller/internal/aws"
+	corev1alpha1 "github.com/EO-DataHub/eodhp-workspace-controller/api/v1alpha1"
+	"github.com/EO-DataHub/eodhp-workspace-controller/internal/aws"
 	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"

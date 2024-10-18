@@ -21,7 +21,7 @@ import (
 	"encoding/json"
 	"log"
 
-	corev1alpha1 "github.com/UKEODHP/workspace-controller/api/v1alpha1"
+	corev1alpha1 "github.com/EO-DataHub/eodhp-workspace-controller/api/v1alpha1"
 	"github.com/apache/pulsar-client-go/pulsar"
 )
 
