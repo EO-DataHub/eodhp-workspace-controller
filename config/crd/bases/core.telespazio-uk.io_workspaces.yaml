@@ -39,6 +39,18 @@ spec:
           spec:
             description: WorkspaceSpec defines the desired state of Workspace
             properties:
+              account:
+                description: Account associated with the workspace
+                type: string
+              accountOwner:
+                description: Owner of the account
+                type: string
+              authorization:
+                description: Authorization details for the workspace
+                properties:
+                  memberGroup:
+                    type: string
+                type: object
               aws:
                 description: AWS parameters
                 properties:
