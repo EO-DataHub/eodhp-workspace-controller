@@ -32,17 +32,30 @@ jobs:
           go install github.com/ctrf-io/go-ctrf-json-reporter/cmd/go-ctrf-json-reporter@latest
       - name: Test with Go (with coverage report)
         id: test
-        run: go test -coverprofile cover.out -json ./... | go-ctrf-json-reporter -output ctrf-report.json
+        run: go test -coverprofile cover.out -json ./... | tee test.out
       - name: Display test results
-        run: npx github-actions-ctrf ctrf-report.json
+        run: |
+          cat test.out | go-ctrf-json-reporter -output ctrf-report.json
+          npx github-actions-ctrf ctrf-report.json
       - uses: actions/upload-artifact@v4
         with:
           name: cover.out
           path: cover.out
+      - name: Check test results
+        run: |
+          cat ctrf-report.json | jq '.results.summary' > summary.json
+          cat summary.json
+          if [ $(jq '.failed' summary.json) -gt 0 ]; then
+            echo "Tests failed"
+            exit 1
+          else
+            echo "Tests passed"
+          fi
   coverage:
     name: Coverage
     runs-on: ubuntu-latest
     needs: test
+    if: always()
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
