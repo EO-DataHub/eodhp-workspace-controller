@@ -1,0 +1,10 @@
+linters:
+  disable:
+    - errcheck
+
+issues:
+  exclude-rules: []
+  exclude-dirs: []
+
+run:
+  timeout: 5m
