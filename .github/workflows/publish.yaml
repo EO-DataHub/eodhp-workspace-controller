@@ -16,7 +16,6 @@ jobs:
       github-ref: ${{ github.ref_name}}
   prechecks:
     name: Prechecks
-    needs: [security-scan]
     runs-on: ubuntu-latest
     steps:
       - run: |
