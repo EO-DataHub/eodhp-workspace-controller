@@ -1,0 +1,53 @@
+name: Build and Publish Docker Image
+
+on:
+  push:
+    tags:
+      - v[0-9]+*
+    branches:
+      - main
+jobs:
+  security-scan:
+    name: Call Security Scan
+    uses: EO-DataHub/github-actions/.github/workflows/security.yaml@main
+  tag:
+    uses: EO-DataHub/github-actions/.github/workflows/get-docker-tag.yaml@main
+    with:
+      github-ref: ${{ github.ref_name}}
+  prechecks:
+    name: Prechecks
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          RETURN_CODE=0
+          if [ -z "${{ vars.IMAGE_NAME }}" ]; then
+            echo "Github vars.IMAGE_NAME required for publish"
+            RETURN_CODE=1
+          fi
+          if [ -z "${{ vars.AWS_ACCOUNT_ID }}" ]; then
+            echo "Github vars.AWS_ACCOUNT_ID required for publish"
+            RETURN_CODE=1
+          fi
+          if [ -z "${{ vars.AWS_ECR }}" ]; then
+            echo "Github vars.AWS_ECR required for publish"
+            RETURN_CODE=1
+          fi
+          if [ -z "${{ vars.AWS_REGION }}" ]; then
+            echo "Github vars.AWS_REGION required for publish"
+            RETURN_CODE=1
+          fi
+          exit $RETURN_CODE
+  publish:
+    name: Build and push Docker image
+    needs: [tag, prechecks]
+    uses: EO-DataHub/github-actions/.github/workflows/docker-image-to-aws-ecr.yaml@main
+    with:
+      image_name: ${{ vars.IMAGE_NAME }}
+      image_tag: ${{ needs.tag.outputs.image-tag }}
+    permissions:
+      id-token: write
+      contents: read
+    secrets:
+      AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+      AWS_ECR: ${{ vars.AWS_ECR }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
