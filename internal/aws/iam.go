@@ -72,6 +72,7 @@ func (r *IAMRoleReconciler) Reconcile(ctx context.Context,
 	assumeRolePolicyDocument := new(strings.Builder)
 	if err := tmpl.Execute(assumeRolePolicyDocument, map[string]any{
 		"accountID": r.AWS.config.AccountID,
+		"cluster":   r.AWS.config.Cluster,
 		"oidc": map[string]any{
 			"provider": r.AWS.config.OIDC.Provider,
 		},
