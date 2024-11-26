@@ -76,6 +76,7 @@ func (r *IAMRoleReconciler) Reconcile(ctx context.Context,
 			"provider": r.AWS.config.OIDC.Provider,
 		},
 		"namespace":      spec.Namespace,
+		"roleName":       r.AWS.config.RoleName,
 		"serviceAccount": spec.ServiceAccount.Name,
 	}); err != nil {
 		return err
