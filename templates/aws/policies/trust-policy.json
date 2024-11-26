@@ -18,7 +18,7 @@
         {
             "Effect": "Allow",
             "Principal": {
-                "AWS": "arn:aws:iam::{{.accountID}}:role/WorkspaceServices-{{.cluster}}"
+                "AWS": "arn:aws:iam::{{.accountID}}:role/{{.cluster}}"
             },
             "Action": "sts:AssumeRole"
         }
