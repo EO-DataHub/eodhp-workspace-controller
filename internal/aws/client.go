@@ -33,7 +33,7 @@ type AWSConfig struct {
 	RecordHostedZoneID string `yaml:"recordHostedZoneID"`
 	DNSName            string `yaml:"dnsName"`
 	AliasHostedZoneID  string `yaml:"aliasHostedZoneID"`
-	Cluster            string `yaml:"cluster"`
+	RoleName           string `yaml:"roleName"`
 }
 
 type AWSClient struct {
