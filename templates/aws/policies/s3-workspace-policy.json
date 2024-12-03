@@ -9,7 +9,7 @@
                 "s3:DeleteObject"
             ],
             "Resource": [
-                "arn:aws:s3:{{ .region }}:{{ .accountID }}:accesspoint/{{ .accessPointName }}/object/{{ .path }}",
+                "arn:aws:s3:{{ .region }}:{{ .accountID }}:accesspoint/{{ .accessPointName }}/object/{{ .path }}*",
                 "arn:aws:s3:::{{ .bucketName }}/{{ .path }}*"
             ]
         },
@@ -22,7 +22,7 @@
             "Condition": {
                 "StringLike": {
                     "s3:prefix": [
-                        "{{ .path }}"
+                        "{{ .path }}*"
                     ]
                 }
             }
