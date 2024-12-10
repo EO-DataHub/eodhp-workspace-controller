@@ -58,6 +58,7 @@ func (r *EFSReconciler) Reconcile(ctx context.Context,
 				"access point ID", accessPointID)
 			efsStatus.AccessPointID = *accessPointID
 			efsStatus.FSID = efsAccess.FSID
+			efsStatus.RootDirectory = efsAccess.RootDirectory
 		} else {
 			log.Error(err, "Failed to reconcile EFS access point")
 			return err
