@@ -21,15 +21,14 @@ spec:
       {{- include "workspace-operator.selectorLabels" . | nindent 8 }}
       annotations:
         kubectl.kubernetes.io/default-container: manager
-        checksum/config: {{ include (print .Template.BasePath "/manager-config.yaml") . | sha256sum }}
     spec:
       containers:
       - args: {{- toYaml .Values.controllerManager.kubeRbacProxy.args | nindent 8 }}
         env:
         - name: KUBERNETES_CLUSTER_DOMAIN
           value: {{ quote .Values.kubernetesClusterDomain }}
-        image: {{ .Values.controllerManager.kubeRbacProxy.image.repository }}:{{ .Values.controllerManager.kubeRbacProxy.image.tag | default .Chart.AppVersion }}
-        imagePullPolicy: {{ .Values.imagePullPolicy }}
+        image: {{ .Values.controllerManager.kubeRbacProxy.image.repository }}:{{ .Values.controllerManager.kubeRbacProxy.image.tag
+          | default .Chart.AppVersion }}
         name: kube-rbac-proxy
         ports:
         - containerPort: 8443
@@ -39,13 +38,14 @@ spec:
           10 }}
         securityContext: {{- toYaml .Values.controllerManager.kubeRbacProxy.containerSecurityContext
           | nindent 10 }}
-      - args: 
-        - --config=/app/config.yaml {{- toYaml .Values.controllerManager.manager.args | nindent 8 }}
+      - args: {{- toYaml .Values.controllerManager.manager.args | nindent 8 }}
+        command:
+        - /manager
         env:
         - name: KUBERNETES_CLUSTER_DOMAIN
           value: {{ quote .Values.kubernetesClusterDomain }}
-        image: {{ .Values.controllerManager.manager.image.repository }}:{{ .Values.controllerManager.manager.image.tag | default .Chart.AppVersion }}
-        imagePullPolicy: {{ .Values.imagePullPolicy }}
+        image: {{ .Values.controllerManager.manager.image.repository }}:{{ .Values.controllerManager.manager.image.tag
+          | default .Chart.AppVersion }}
         livenessProbe:
           httpGet:
             path: /healthz
@@ -63,15 +63,7 @@ spec:
           }}
         securityContext: {{- toYaml .Values.controllerManager.manager.containerSecurityContext
           | nindent 10 }}
-        volumeMounts:
-        - name: config
-          mountPath: /app/config.yaml
-          subPath: config.yaml
-      volumes:
-        - name: config
-          configMap:
-            name: {{ include "workspace-operator.fullname" . }}-config
-      securityContext:
-        runAsNonRoot: true
-      serviceAccountName: {{ include "workspace-operator.serviceAccountName" . }}
+      securityContext: {{- toYaml .Values.controllerManager.podSecurityContext | nindent
+        8 }}
+      serviceAccountName: {{ include "workspace-operator.fullname" . }}-controller-manager
       terminationGracePeriodSeconds: 10

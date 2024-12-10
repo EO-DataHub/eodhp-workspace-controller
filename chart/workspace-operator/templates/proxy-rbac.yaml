@@ -36,5 +36,5 @@ roleRef:
   name: '{{ include "workspace-operator.fullname" . }}-proxy-role'
 subjects:
 - kind: ServiceAccount
-  name: '{{ include "workspace-operator.serviceAccountName" . }}'
+  name: '{{ include "workspace-operator.fullname" . }}-controller-manager'
   namespace: '{{ .Release.Namespace }}'
