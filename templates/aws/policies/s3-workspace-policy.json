@@ -10,7 +10,8 @@
             ],
             "Resource": [
                 "arn:aws:s3:{{ .region }}:{{ .accountID }}:accesspoint/{{ .accessPointName }}/object/{{ .path }}*",
-                "arn:aws:s3:::{{ .bucketName }}/{{ .path }}*"
+                "arn:aws:s3:::{{ .bucketName }}/{{ .path }}*",
+                "arn:aws:s3:::{{ .bucketName }}/harvested/{{ .path }}*"
             ]
         },
         {
