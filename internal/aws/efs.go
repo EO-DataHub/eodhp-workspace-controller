@@ -119,7 +119,7 @@ func (r *EFSReconciler) Teardown(ctx context.Context,
 
 func (r *EFSReconciler) ReconcileEFSAccessPoint(ctx context.Context,
 	efsAccess corev1alpha1.EFSAccess) (*string, error) {
-
+	
 	log := log.FromContext(ctx)
 
 	// Create a new EFS service client
@@ -128,6 +128,7 @@ func (r *EFSReconciler) ReconcileEFSAccessPoint(ctx context.Context,
 	// Get the access point
 	describeAccessPointsParams := &efs.DescribeAccessPointsInput{
 		FileSystemId: aws.String(efsAccess.FSID),
+		MaxResults:   aws.Int64(10000),
 	}
 	accessPoints, err := svc.DescribeAccessPoints(describeAccessPointsParams)
 	if err != nil {
