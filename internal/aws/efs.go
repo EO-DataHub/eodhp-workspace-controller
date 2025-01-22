@@ -58,6 +58,9 @@ func (r *EFSReconciler) Reconcile(ctx context.Context,
 				"access point ID", accessPointID)
 			efsStatus.AccessPointID = *accessPointID
 			efsStatus.FSID = efsAccess.FSID
+
+			// Update spec with accessPointID
+			spec.AWS.EFS.AccessPoints[i].AccessPointID = efsStatus.AccessPointID
 		} else {
 			log.Error(err, "Failed to reconcile EFS access point")
 			return err
@@ -119,7 +122,7 @@ func (r *EFSReconciler) Teardown(ctx context.Context,
 
 func (r *EFSReconciler) ReconcileEFSAccessPoint(ctx context.Context,
 	efsAccess corev1alpha1.EFSAccess) (*string, error) {
-	
+
 	log := log.FromContext(ctx)
 
 	// Create a new EFS service client
@@ -127,8 +130,8 @@ func (r *EFSReconciler) ReconcileEFSAccessPoint(ctx context.Context,
 
 	// Get the access point
 	describeAccessPointsParams := &efs.DescribeAccessPointsInput{
-		FileSystemId: aws.String(efsAccess.FSID),
-		MaxResults:   aws.Int64(10000),
+		FileSystemId:  aws.String(efsAccess.FSID),
+		AccessPointId: aws.String(efsAccess.AccessPointID),
 	}
 	accessPoints, err := svc.DescribeAccessPoints(describeAccessPointsParams)
 	if err != nil {

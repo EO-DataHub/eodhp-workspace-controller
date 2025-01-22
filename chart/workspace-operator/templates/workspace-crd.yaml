@@ -60,6 +60,8 @@ spec:
                       accessPoints:
                         items:
                           properties:
+                            accessPointID:
+                              type: string
                             fsID:
                               type: string
                             name:
