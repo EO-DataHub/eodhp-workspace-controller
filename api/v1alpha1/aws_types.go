@@ -13,7 +13,6 @@ type EFSSpec struct {
 type EFSAccess struct {
 	Name          string `json:"name,omitempty"`
 	FSID          string `json:"fsID,omitempty"`
-	AccessPointID string `json:"accessPointID,omitempty"`
 	RootDirectory string `json:"rootDirectory,omitempty"`
 	User          User   `json:"user,omitempty"`
 	Permissions   string `json:"permissions,omitempty"`
