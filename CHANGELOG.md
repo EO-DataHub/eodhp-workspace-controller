@@ -1,5 +1,9 @@
 # Workspace Controller
 
+## v0.4.5 (23-01-2025)
+
+- Bugfix EFS Reconciler to find all existing AccessPointIDs
+
 ## v0.4.0 (03-07-2024)
 
 - Added workspace update/delete events

@@ -125,31 +125,48 @@ func (r *EFSReconciler) ReconcileEFSAccessPoint(ctx context.Context,
 	// Create a new EFS service client
 	svc := efs.New(r.AWS.sess)
 
-	// Get the access point
-	describeAccessPointsParams := &efs.DescribeAccessPointsInput{
-		FileSystemId: aws.String(efsAccess.FSID),
-	}
-	accessPoints, err := svc.DescribeAccessPoints(describeAccessPointsParams)
-	if err != nil {
-		return nil, err
-	}
-
-	// Find the access point with the desired root directory
+	// Pagination variables
 	var accessPointID string
-	for _, ap := range accessPoints.AccessPoints {
-		if aws.StringValue(ap.RootDirectory.Path) == efsAccess.RootDirectory {
-			accessPointID = aws.StringValue(ap.AccessPointId)
-			break
-		}
-	}
+	var nextToken *string
 
-	if accessPointID != "" {
-		// Access point has been found
-		return &accessPointID, nil
+	// Iterate through paginated results - returns 100 by default
+	for {
+		// Describe access points with pagination
+		describeAccessPointsParams := &efs.DescribeAccessPointsInput{
+			FileSystemId: aws.String(efsAccess.FSID),
+			NextToken:    nextToken,
+		}
+
+		accessPoints, err := svc.DescribeAccessPoints(describeAccessPointsParams)
+		if err != nil {
+			log.Error(err, "Failed to describe EFS access points", "FileSystemId", efsAccess.FSID)
+			return nil, err
+		}
+
+		// Check each access point for the desired root directory
+		for _, ap := range accessPoints.AccessPoints {
+			if aws.StringValue(ap.RootDirectory.Path) == efsAccess.RootDirectory {
+				accessPointID = aws.StringValue(ap.AccessPointId)
+				break
+			}
+		}
+
+		// If the access point is found, return it
+		if accessPointID != "" {
+			log.Info("Found existing EFS access point", "AccessPointID", accessPointID)
+			return &accessPointID, nil
+		}
+
+		// Check if there are more pages
+		if accessPoints.NextToken == nil {
+			break 
+		}
+
+		// Update the nextToken for the next request
+		nextToken = accessPoints.NextToken
 	}
 
 	// Access point not found, create a new one
-	// Create the access point
 	if ap, err := svc.CreateAccessPoint(&efs.CreateAccessPointInput{
 		ClientToken:  aws.String(uuid.New().String()),
 		FileSystemId: aws.String(efsAccess.FSID),
