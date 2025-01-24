@@ -159,7 +159,7 @@ func (r *EFSReconciler) ReconcileEFSAccessPoint(ctx context.Context,
 
 		// Check if there are more pages
 		if accessPoints.NextToken == nil {
-			break 
+			break
 		}
 
 		// Update the nextToken for the next request

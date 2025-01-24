@@ -210,8 +210,14 @@ spec:
                         type: array
                     type: object
                 type: object
+              errorDescription:
+                description: Workspace Error Description
+                type: string
               namespace:
                 description: Name of child namespace
+                type: string
+              state:
+                description: Workspace Status
                 type: string
             type: object
         type: object

@@ -214,6 +214,12 @@ spec:
               namespace:
                 description: Name of child namespace
                 type: string
+              errorDescription:
+                description: Workspace Error Description
+                type: string
+              state:
+                description: Workspace Status
+                type: string
             type: object
         type: object
     served: true
