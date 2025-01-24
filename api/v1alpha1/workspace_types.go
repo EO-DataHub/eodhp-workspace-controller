@@ -113,6 +113,12 @@ type WorkspaceStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
+	// Workspace Status
+	State string `json:"state,omitempty"`
+
+	// Workspace Error Description
+	ErrorDescription string `json:"errorDescription,omitempty"`
+
 	// Name of child namespace
 	Namespace string `json:"namespace,omitempty"`
 	// AWS status
