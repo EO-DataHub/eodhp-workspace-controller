@@ -1,5 +1,10 @@
 # Workspace Controller
 
+## v0.4.6 (27-01-2025)
+
+- Added `state` and `errorDescription` to the Workspace status CRD and embedded in the reconciler
+- Coupled with new helm/workspace-operator - 0.4.2-rc4
+
 ## v0.4.5 (23-01-2025)
 
 - Bugfix EFS Reconciler to find all existing AccessPointIDs
