@@ -4,5 +4,5 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 images:
 - name: controller
-  newName: public.ecr.aws/n1b3o1k2/workspace-controller
+  newName: public.ecr.aws/eodh/workspace-controller
   newTag: 0.3.0-rc12

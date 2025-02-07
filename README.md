@@ -20,8 +20,8 @@ make run  # run a local instance of the controller
 ```bash
 make manifests  # generate the latest manifests
 make install  # installs CRDs to the cluster
-make docker-build docker-push IMG=public.ecr.aws/n1b3o1k2/workspace-controller:<tag> # build and push 
-make deploy IMG=public.ecr.aws/n1b3o1k2/workspace-controller:<tag>  # deploy controller to cluster
+make docker-build docker-push IMG=public.ecr.aws/eodh/workspace-controller:<tag> # build and push 
+make deploy IMG=public.ecr.aws/eodh/workspace-controller:<tag>  # deploy controller to cluster
 ```
 
 ## Uninstall
@@ -64,7 +64,7 @@ To publish the Helm chart:
 ```bash
 helm package chart/workspace-operator
 aws ecr-public get-login-password --region us-east-1 | helm registry login --username AWS --password-stdin public.ecr.aws
-helm push workspace-operator-x.y.z.tgz oci://public.ecr.aws/n1b3o1k2/helm
+helm push workspace-operator-x.y.z.tgz oci://public.ecr.aws/eodh/helm
 ```
 
 ## Manually Export Manifests
