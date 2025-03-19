@@ -32,6 +32,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
+// Workspace states
+const (
+	StateReady    string = "Ready"
+	StateError    string = "Error"
+	StateDeleting string = "Deleting"
+)
+
 // WorkspaceReconciler reconciles a Workspace object
 type WorkspaceReconciler struct {
 	Client
@@ -148,7 +155,7 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context,
 				log.Error(err, "Reconciler failed",
 					"reconciler", reflect.TypeOf(reconciler))
 
-				sts.State = "Error"
+				sts.State = StateError
 				sts.ErrorDescription = "Reconciler [" + reconcilerName + "] failed: " + err.Error()
 				_, _ = r.UpdateStatus(ctx, req, sts)
 				return ctrl.Result{}, err
@@ -181,7 +188,7 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context,
 			if err := reconciler.Teardown(ctx, &ws.Spec, sts); err != nil {
 				log.Error(err, "Teardown failed",
 					"reconciler", reflect.TypeOf(reconciler))
-				sts.State = "Error"
+				sts.State = StateError
 				sts.ErrorDescription = "Teardown by [" + reconcilerName + "] failed: " + err.Error()
 				_, _ = r.UpdateStatus(ctx, req, sts)
 				return ctrl.Result{}, err
@@ -193,7 +200,7 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context,
 		}
 
 		if _, err := r.TeardownFinalizer(ctx, req); err != nil {
-			sts.State = "Error"
+			sts.State = StateError
 			sts.ErrorDescription = "Finalizer teardown failed: " + err.Error()
 			_, _ = r.UpdateStatus(ctx, req, sts)
 			return ctrl.Result{}, err
@@ -242,6 +249,12 @@ func (r *WorkspaceReconciler) TeardownFinalizer(ctx context.Context,
 	if err := r.Get(ctx, req.NamespacedName, ws); err != nil {
 		return false, client.IgnoreNotFound(err)
 	}
+
+	// Ensure the status is set to Deleting before finalizer removal - ensures the last event is sent as this state
+	sts := ws.Status.DeepCopy()
+	sts.State = StateDeleting
+	sts.ErrorDescription = ""
+
 	if updated := controllerutil.RemoveFinalizer(ws, r.finalizer); updated {
 		if err := r.Update(ctx, ws); err != nil {
 			return false, err
