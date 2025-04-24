@@ -10,8 +10,11 @@
                 "sts:AssumeRoleWithWebIdentity"
             ],
             "Condition": {
-                "StringEquals": {
-                    "{{.oidc.provider}}:sub": "system:serviceaccount:{{.namespace}}:{{.serviceAccount}}"
+                "StringLike": {
+                    "{{.oidc.provider}}:sub": [
+                        "system:serviceaccount:{{.namespace}}:{{.serviceAccount}}",
+                        "system:serviceaccount:ws-*:temp-{{.namespace}}-*"
+                    ]
                 }
             }
         },
