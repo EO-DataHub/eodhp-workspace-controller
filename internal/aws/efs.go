@@ -109,8 +109,7 @@ func (r *EFSReconciler) Teardown(ctx context.Context,
 			log.Info("Deleted EFS Access Point",
 				"access point ID", efsStatus.AccessPointID)
 		} else {
-			log.Info("Failed to delete EFS Access Point",
-				"access point ID", efsStatus.AccessPointID)
+			log.Error(err, "Failed to delete EFS Access Point", "access point ID", efsStatus.AccessPointID)
 		}
 	}
 
