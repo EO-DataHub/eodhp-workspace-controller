@@ -19,11 +19,15 @@ package controller
 import (
 	"context"
 	"fmt"
+	"time"
 
 	corev1alpha1 "github.com/EO-DataHub/eodhp-workspace-controller/api/v1alpha1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
@@ -56,6 +60,10 @@ func (r *StorageReconciler) Teardown(
 	status *corev1alpha1.WorkspaceStatus) error {
 
 	log := log.FromContext(ctx)
+
+	if err := r.RunCleanupBlockStore(ctx, spec, status); err != nil {
+		log.Error(err, "Failed to teardown persistent volumes")
+	}
 
 	if err := r.DeletePersistentVolumes(ctx, spec, status); err != nil {
 		log.Error(err, "Failed to teardown persistent volumes")
@@ -238,4 +246,72 @@ func (r *StorageReconciler) DeletePersistentVolumeClaims(
 		r.DeleteResource(ctx, pvc)
 	}
 	return nil
+}
+
+func (r *StorageReconciler) RunCleanupBlockStore(ctx context.Context, spec *corev1alpha1.WorkspaceSpec, status *corev1alpha1.WorkspaceStatus) error {
+	log := log.FromContext(ctx)
+	jobName := "delete-block-store"
+	jobNamespace := spec.Namespace
+	job := &batchv1.Job{}
+
+	err := r.Client.Get(ctx, client.ObjectKey{Name: jobName, Namespace: jobNamespace}, job)
+	if err != nil && apierrors.IsNotFound(err) {
+		log.Info("delete-block-store Job not found, creating new one", "job", jobName, "namespace", jobNamespace)
+		newJob := &batchv1.Job{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      jobName,
+				Namespace: jobNamespace,
+			},
+			Spec: batchv1.JobSpec{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						RestartPolicy: corev1.RestartPolicyNever,
+						Containers: []corev1.Container{{
+							Name:    "cleanup",
+							Image:   "busybox",
+							Command: []string{"sh", "-c", "rm -rf /workspace/*"},
+							VolumeMounts: []corev1.VolumeMount{{
+								Name:      "workspace-data",
+								MountPath: "/workspace",
+							}},
+						}},
+						Volumes: []corev1.Volume{{
+							Name: "workspace-data",
+							VolumeSource: corev1.VolumeSource{
+								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+									ClaimName: spec.Storage.PersistentVolumeClaims[0].Name,
+								},
+							},
+						}},
+					},
+				},
+			},
+		}
+		if err := r.Client.Create(ctx, newJob); err != nil {
+			log.Error(err, "Failed to create job", "job", jobName)
+			return fmt.Errorf("failed to create job delete-block-store: %w", err)
+		}
+		log.Info("Job created", "job", jobName)
+	}
+
+	// Poll until job completes or fails - 60 seconds timeout
+	log.Info("Waiting for cleanup job to complete", "job", jobName)
+	for i := 0; i < 60; i++ {
+		err := r.Client.Get(ctx, client.ObjectKey{Name: jobName, Namespace: jobNamespace}, job)
+		if err != nil {
+			log.Error(err, "Failed to get cleanup job status")
+			return fmt.Errorf("failed to get cleanup job: %w", err)
+		}
+		for _, c := range job.Status.Conditions {
+			if c.Type == batchv1.JobComplete && c.Status == corev1.ConditionTrue {
+				log.Info("Cleanup job completed")
+				return nil
+			}
+			if c.Type == batchv1.JobFailed && c.Status == corev1.ConditionTrue {
+				return fmt.Errorf("delete-block-store job failed")
+			}
+		}
+		time.Sleep(1 * time.Second)
+	}
+	return fmt.Errorf("timeout waiting for delete-block-store job to complete")
 }

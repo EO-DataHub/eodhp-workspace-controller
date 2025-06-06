@@ -236,49 +236,6 @@ func (r *S3Reconciler) DeleteS3PolicyFromRole(ctx context.Context,
 	return nil
 }
 
-// func (r *S3Reconciler) DeleteS3Prefix(ctx context.Context,
-// 	bucket *corev1alpha1.S3Bucket,
-// 	status *corev1alpha1.S3BucketStatus) error {
-
-// 	log := log.FromContext(ctx)
-// 	svc := s3.New(r.AWS.sess)
-
-// 	// Safety check: skip if prefix is empty or root
-// 	if bucket.Path == "" || bucket.Path == "/" {
-// 		log.Error(nil, "Skipping prefix processing: empty or root prefix", "bucket", bucket.Name, "prefix", bucket.Path)
-// 		return nil
-// 	}
-
-// 	// List objects in the prefix
-// 	listInput := &s3.ListObjectsV2Input{
-// 		Bucket: aws.String(bucket.Name),
-// 		Prefix: aws.String(bucket.Path),
-// 	}
-
-// 	// Iterate through objects and log them without deleting
-// 	err := svc.ListObjectsV2Pages(listInput, func(page *s3.ListObjectsV2Output, lastPage bool) bool {
-// 		if page == nil || len(page.Contents) == 0 {
-// 			log.Info("No objects found in S3 prefix", "bucket", bucket.Name, "prefix", bucket.Path)
-// 			return false
-// 		}
-
-// 		// Log each object that would be deleted
-// 		for _, obj := range page.Contents {
-// 			log.Info("Object to be deleted", "bucket", bucket.Name, "prefix", bucket.Path, "key", *obj.Key)
-// 		}
-
-// 		return true
-// 	})
-
-// 	if err != nil {
-// 		log.Error(err, "Failed to list objects for prefix", "bucket", bucket.Name, "prefix", bucket.Path)
-// 		return err
-// 	}
-
-// 	log.Info("Completed logging objects in S3 prefix without deletion", "bucket", bucket.Name, "prefix", bucket.Path)
-// 	return nil
-// }
-
 func (r *S3Reconciler) DeleteS3Prefix(ctx context.Context,
 	bucket *corev1alpha1.S3Bucket,
 	status *corev1alpha1.S3BucketStatus) error {

@@ -18,18 +18,13 @@ package controller
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"reflect"
-	"time"
 
 	corev1alpha1 "github.com/EO-DataHub/eodhp-workspace-controller/api/v1alpha1"
 	"github.com/EO-DataHub/eodhp-workspace-controller/internal/aws"
 	"gopkg.in/yaml.v2"
-	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -186,25 +181,8 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context,
 			}
 		}
 	} else {
-		// Workspace is being deleted,
-
-		// Run cleanup job before teardown
-		// We need to do this before we remove the finalizer as the job won't start if the namespace is in a terminating state
-		log.Info("Workspace is being deleted, running delete data job")
-		done, err := r.deleteData(ctx, ws)
-		if err != nil {
-			sts.State = StateError
-			sts.ErrorDescription = "Delete data job failed: " + err.Error()
-			_, _ = r.UpdateStatus(ctx, req, sts)
-			return ctrl.Result{}, err
-		}
-		if !done {
-			return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
-		}
-
-		log.Info("Delete data job completed successfully, proceeding with teardown")
-
-		// teardown dependents
+		// Workspace is being deleted, perform teardown
+		log.Info("Workspace is being deleted", "workspace", ws.Name)
 		for _, reconciler := range reverse(r.reconcilers) {
 
 			reconcilerName := reflect.TypeOf(reconciler).String()
@@ -342,78 +320,4 @@ func (c *Config) Load(path string) error {
 	}
 
 	return nil
-}
-
-// deleteData runs a cleanup job to delete workspace data.
-// It checks if the job exists, creates it if not, and monitors its status.
-// Returns true if the job completed successfully, false if still running, or an error if it failed.
-// The job deletes all data in the workspace's PVC.
-func (r *WorkspaceReconciler) deleteData(ctx context.Context, ws *corev1alpha1.Workspace) (bool, error) {
-	log := log.FromContext(ctx)
-	jobName := "delete-data-" + ws.Name
-	jobNamespace := "ws-" + ws.Name
-
-	job := &batchv1.Job{}
-	err := r.Get(ctx, client.ObjectKey{Name: jobName, Namespace: jobNamespace}, job)
-
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			log.Info("Delete data Job not found, creating new one", "job", jobName, "namespace", jobNamespace)
-
-			newJob := &batchv1.Job{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      jobName,
-					Namespace: jobNamespace,
-				},
-				Spec: batchv1.JobSpec{
-					Template: corev1.PodTemplateSpec{
-						Spec: corev1.PodSpec{
-							RestartPolicy: corev1.RestartPolicyNever,
-							Containers: []corev1.Container{{
-								Name:    "cleanup",
-								Image:   "busybox",
-								Command: []string{"sh", "-c", "rm -rf /workspace/*"},
-								VolumeMounts: []corev1.VolumeMount{{
-									Name:      "workspace-data",
-									MountPath: "/workspace",
-								}},
-							}},
-							Volumes: []corev1.Volume{{
-								Name: "workspace-data",
-								VolumeSource: corev1.VolumeSource{
-									PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-										ClaimName: "pvc-" + ws.Name,
-									},
-								},
-							}},
-						},
-					},
-				},
-			}
-
-			if err := r.Create(ctx, newJob); err != nil {
-				log.Error(err, "Failed to create delete data job", "job", jobName)
-				return false, fmt.Errorf("failed to create delete data job: %w", err)
-			}
-
-			log.Info("Delete data job created, waiting for completion", "job", jobName)
-			return false, nil
-		}
-
-		// Unexpected error fetching job
-		log.Error(err, "Failed to get delete data job", "job", jobName)
-		return false, err
-	}
-
-	// Job exists, check its status
-	for _, c := range job.Status.Conditions {
-		if c.Type == batchv1.JobComplete && c.Status == corev1.ConditionTrue {
-			return true, nil
-		}
-		if c.Type == batchv1.JobFailed && c.Status == corev1.ConditionTrue {
-			return false, fmt.Errorf("cleanup job failed")
-		}
-	}
-
-	return false, nil 
 }
