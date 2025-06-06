@@ -62,7 +62,7 @@ func (r *StorageReconciler) Teardown(
 	log := log.FromContext(ctx)
 
 	if err := r.DeleteBlockStoreData(ctx, spec, status); err != nil {
-		log.Error(err, "Failed to teardown persistent volumes")
+		log.Error(err, "Failed to delete block store data")
 	}
 
 	if err := r.DeletePersistentVolumes(ctx, spec, status); err != nil {
