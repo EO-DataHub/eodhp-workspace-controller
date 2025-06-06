@@ -61,7 +61,7 @@ func (r *StorageReconciler) Teardown(
 
 	log := log.FromContext(ctx)
 
-	if err := r.RunCleanupBlockStore(ctx, spec, status); err != nil {
+	if err := r.DeleteBlockStoreData(ctx, spec, status); err != nil {
 		log.Error(err, "Failed to teardown persistent volumes")
 	}
 
@@ -248,7 +248,7 @@ func (r *StorageReconciler) DeletePersistentVolumeClaims(
 	return nil
 }
 
-func (r *StorageReconciler) RunCleanupBlockStore(ctx context.Context, spec *corev1alpha1.WorkspaceSpec, status *corev1alpha1.WorkspaceStatus) error {
+func (r *StorageReconciler) DeleteBlockStoreData(ctx context.Context, spec *corev1alpha1.WorkspaceSpec, status *corev1alpha1.WorkspaceStatus) error {
 	log := log.FromContext(ctx)
 	jobName := "delete-block-store"
 	jobNamespace := spec.Namespace
@@ -294,21 +294,21 @@ func (r *StorageReconciler) RunCleanupBlockStore(ctx context.Context, spec *core
 		log.Info("Job created", "job", jobName)
 	}
 
-	// Poll until job completes or fails - 60 seconds timeout
-	log.Info("Waiting for cleanup job to complete", "job", jobName)
+	// Poll until job completes or fails - 60 seconds timeout - we want to ensure the job completes
+	log.Info("Waiting for job to complete", "job", jobName)
 	for i := 0; i < 60; i++ {
 		err := r.Client.Get(ctx, client.ObjectKey{Name: jobName, Namespace: jobNamespace}, job)
 		if err != nil {
-			log.Error(err, "Failed to get cleanup job status")
-			return fmt.Errorf("failed to get cleanup job: %w", err)
+			log.Error(err, "Failed to get job status")
+			return fmt.Errorf("failed to get job: %w", err)
 		}
 		for _, c := range job.Status.Conditions {
 			if c.Type == batchv1.JobComplete && c.Status == corev1.ConditionTrue {
-				log.Info("Cleanup job completed")
+				log.Info("Job completed")
 				return nil
 			}
 			if c.Type == batchv1.JobFailed && c.Status == corev1.ConditionTrue {
-				return fmt.Errorf("delete-block-store job failed")
+				return fmt.Errorf("Job failed")
 			}
 		}
 		time.Sleep(1 * time.Second)
