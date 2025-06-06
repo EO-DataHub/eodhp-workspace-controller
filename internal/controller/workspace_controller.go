@@ -118,6 +118,7 @@ type Reconciler interface {
 //+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=rolebindings,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -180,7 +181,8 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context,
 			}
 		}
 	} else {
-		// Workspace is being deleted, teardown dependents
+		// Workspace is being deleted, perform teardown
+		log.Info("Workspace is being deleted", "workspace", ws.Name)
 		for _, reconciler := range reverse(r.reconcilers) {
 
 			reconcilerName := reflect.TypeOf(reconciler).String()
