@@ -81,12 +81,17 @@ func (r *ServiceAccountReconciler) Reconcile(
 		serviceAccount.Annotations["eks.amazonaws.com/role-arn"] = status.AWS.Role.Name
 	}
 	if err := r.Create(ctx, serviceAccount); err != nil {
-		log.Error(err, "Failed to create ServiceAccount", "name",
-			spec.ServiceAccount.Name, "namespace", spec.Namespace)
-		return err
+		if errors.IsAlreadyExists(err) {
+			log.Info("ServiceAccount already exists", "name",
+				spec.ServiceAccount.Name, "namespace", spec.Namespace)
+		} else {
+			log.Error(err, "Failed to create ServiceAccount", "name",
+				spec.ServiceAccount.Name, "namespace", spec.Namespace)
+			return err
+		}
 	}
 
-	log.Info("ServiceAccount created", "name", spec.ServiceAccount.Name,
+	log.Info("ServiceAccount created/updated", "name", spec.ServiceAccount.Name,
 		"namespace", spec.Namespace)
 
 	return nil
