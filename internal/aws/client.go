@@ -34,6 +34,7 @@ type AWSConfig struct {
 	DNSName            string `yaml:"dnsName"`
 	AliasHostedZoneID  string `yaml:"aliasHostedZoneID"`
 	RoleName           string `yaml:"roleName"`
+	Prefix             string `yaml:"prefix"`
 }
 
 type AWSClient struct {
