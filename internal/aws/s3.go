@@ -108,6 +108,11 @@ func (r *S3Reconciler) Teardown(ctx context.Context,
 			}
 		}
 
+		// Delete the S3 prefix and its contents
+		if err := r.DeleteS3Prefix(ctx, &bucket, bucketStatus); err != nil {
+			log.Error(err, "Failed to delete S3 prefix", "bucket", bucket)
+		}
+
 	}
 	status.AWS.S3.Buckets = bucketStatuses
 	return nil
@@ -228,6 +233,76 @@ func (r *S3Reconciler) DeleteS3PolicyFromRole(ctx context.Context,
 	}
 
 	log.Info("Deleted inline policy from role", "policyName", policyName, "role", roleName)
+	return nil
+}
+
+func (r *S3Reconciler) DeleteS3Prefix(ctx context.Context,
+	bucket *corev1alpha1.S3Bucket,
+	status *corev1alpha1.S3BucketStatus) error {
+
+	log := log.FromContext(ctx)
+	svc := s3.New(r.AWS.sess)
+
+	// List objects in the prefix
+	listInput := &s3.ListObjectsV2Input{
+		Bucket: aws.String(bucket.Name),
+		Prefix: aws.String(bucket.Path),
+	}
+
+	// Iterate through objects and delete them
+	err := svc.ListObjectsV2Pages(listInput, func(page *s3.ListObjectsV2Output, lastPage bool) bool {
+		if page == nil || len(page.Contents) == 0 {
+			return false
+		}
+
+		// Prepare batch delete request
+		var objects []*s3.ObjectIdentifier
+		for _, obj := range page.Contents {
+			objects = append(objects, &s3.ObjectIdentifier{
+				Key: obj.Key,
+			})
+		}
+
+		// Delete objects in batch
+		deleteInput := &s3.DeleteObjectsInput{
+			Bucket: aws.String(bucket.Name),
+			Delete: &s3.Delete{
+				Objects: objects,
+				Quiet:   aws.Bool(true),
+			},
+		}
+
+		_, err := svc.DeleteObjects(deleteInput)
+		if err != nil {
+			log.Error(err, "Failed to delete objects in prefix", "bucket", bucket.Name, "prefix", bucket.Path)
+			return false
+		}
+
+		return true
+	})
+
+	if err != nil {
+		log.Error(err, "Failed to list objects for deletion", "bucket", bucket.Name, "prefix", bucket.Path)
+		return err
+	}
+
+	// Explicitly delete the prefix object if it exists
+	_, err = svc.DeleteObject(&s3.DeleteObjectInput{
+		Bucket: aws.String(bucket.Name),
+		Key:    aws.String(bucket.Path),
+	})
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok && aerr.Code() == "NoSuchKey" {
+			log.Info("No prefix object to delete", "bucket", bucket.Name, "prefix", bucket.Path)
+		} else {
+			log.Error(err, "Failed to delete prefix object", "bucket", bucket.Name, "prefix", bucket.Path)
+			return err
+		}
+	} else {
+		log.Info("Deleted S3 prefix object", "bucket", bucket.Name, "prefix", bucket.Path)
+	}
+
+	log.Info("Completed deletion of S3 prefix and its contents", "bucket", bucket.Name, "prefix", bucket.Path)
 	return nil
 }
 
