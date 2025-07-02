@@ -1,6 +1,6 @@
 # Workspace Operator
 
-This services provides reconcilers for a number of workspace configurations to ensure they remain aligned. This includes reconcilers for:
+This service provides reconcilers for a number of workspace configurations to ensure they remain aligned. This includes reconcilers for:
 - namespace
 - storage (EFS and S3)
 - service account
