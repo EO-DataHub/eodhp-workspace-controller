@@ -1,5 +1,11 @@
 # Workspace Operator
 
+This service provides reconcilers for a number of workspace configurations to ensure they remain aligned. This includes reconcilers for:
+- namespace
+- storage (EFS and S3)
+- service account
+- AWS IAM Policies
+
 See [Kubebuilder docs](https://book.kubebuilder.io/quick-start.html) for full instructions.
 
 ## Prerequisites
