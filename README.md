@@ -91,3 +91,43 @@ aws:
   oidc:
     provider: oidc.eks.my-region.amazonaws.com/id/A1B2C3D4E5F6G7H8
 ```
+
+### Pulsar events
+
+If `pulsar.url` is set, the controller publishes workspace `update` and `delete` events to Pulsar.
+
+```yaml
+pulsar:
+  url: pulsar://pulsar-proxy.pulsar:6650
+  # Optional. File containing a JWT for Pulsar token authentication.
+  # If not set, the controller connects without authentication.
+  tokenFile: /var/run/secrets/pulsar/token
+  # Optional. Defaults to workspace-controller.
+  topic: persistent://public/workspaces/workspace-controller
+```
+
+The token file is read again each time the client connects or re-authenticates, so a rotated token is picked up without a restart. If `tokenFile` is set but the file cannot be read, the controller exits at startup.
+
+### Helm chart values
+
+The Helm chart renders `controllerManager.config` as the config file above. Extra environment variables, volume mounts and volumes can be added to the manager with `controllerManager.manager.extraEnv`, `controllerManager.manager.extraVolumeMounts` and `controllerManager.extraVolumes`. For example, to mount a Pulsar token from a secret:
+
+```yaml
+controllerManager:
+  manager:
+    extraVolumeMounts:
+      - name: pulsar-token
+        mountPath: /var/run/secrets/pulsar
+        readOnly: true
+  extraVolumes:
+    - name: pulsar-token
+      secret:
+        secretName: workspace-controller-pulsar-token
+  config:
+    pulsar:
+      url: pulsar://pulsar-proxy.pulsar:6650
+      tokenFile: /var/run/secrets/pulsar/token
+      topic: persistent://public/workspaces/workspace-controller
+```
+
+Mount the secret as a directory rather than with `subPath`, otherwise the file is not updated when the secret changes.

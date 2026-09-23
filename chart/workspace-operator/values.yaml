@@ -40,11 +40,25 @@ controllerManager:
       requests:
         cpu: 10m
         memory: 64Mi
+    # Extra environment variables for the manager container
+    extraEnv: []
+    # Extra volume mounts for the manager container, e.g. a Pulsar token
+    # secret read via config.pulsar.tokenFile. Do not use subPath for secrets
+    # that rotate, as subPath mounts are not updated.
+    extraVolumeMounts: []
+  # Extra pod volumes, mounted with manager.extraVolumeMounts
+  extraVolumes: []
   replicas: 1
   serviceAccount:
     create: true
     name: workspace-controller
     annotations: {}
+  # Controller config, rendered to /app/config.yaml. See the README for all keys.
+  # config:
+  #   pulsar:
+  #     url: pulsar://pulsar-proxy.pulsar:6650
+  #     tokenFile: /var/run/secrets/pulsar/token
+  #     topic: persistent://public/workspaces/workspace-controller
 kubernetesClusterDomain: cluster.local
 metricsService:
   ports:

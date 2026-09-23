@@ -19,11 +19,36 @@ package controller
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
+	"os"
 
 	corev1alpha1 "github.com/EO-DataHub/eodhp-workspace-controller/api/v1alpha1"
 	"github.com/apache/pulsar-client-go/pulsar"
 )
+
+// DefaultPulsarTopic is the topic workspace events are published to when no
+// topic is configured.
+const DefaultPulsarTopic = "workspace-controller"
+
+type PulsarConfig struct {
+	URL string `yaml:"url"`
+	// TokenFile is the path to a file containing a JWT used to authenticate
+	// with Pulsar. The file is re-read whenever the client (re)authenticates,
+	// so a rotated token is picked up without a restart. Empty means connect
+	// without authentication.
+	TokenFile string `yaml:"tokenFile"`
+	// Topic to publish workspace events to. Defaults to DefaultPulsarTopic.
+	Topic string `yaml:"topic"`
+}
+
+// TopicName returns the configured topic, or DefaultPulsarTopic if none is set.
+func (c PulsarConfig) TopicName() string {
+	if c.Topic == "" {
+		return DefaultPulsarTopic
+	}
+	return c.Topic
+}
 
 type EventsClient struct {
 	pulsar   pulsar.Client
@@ -47,22 +72,36 @@ func (e *Event) ToJSON(event Event) ([]byte, error) {
 	return jsonMessage, nil
 }
 
-func NewEventsClient(pulsarURL, topic string) (*EventsClient, error) {
-	client, err := pulsar.NewClient(pulsar.ClientOptions{
-		URL: pulsarURL,
-	})
+func NewEventsClient(config PulsarConfig) (*EventsClient, error) {
+	options := pulsar.ClientOptions{
+		URL: config.URL,
+	}
+
+	if config.TokenFile != "" {
+		// Check the file up front so a missing secret mount gives a clear error
+		f, err := os.Open(config.TokenFile)
+		if err != nil {
+			return nil, fmt.Errorf("pulsar tokenFile is configured but cannot be read: %w", err)
+		}
+		f.Close()
+		options.Authentication = pulsar.NewAuthenticationTokenFromFile(config.TokenFile)
+	}
+
+	client, err := pulsar.NewClient(options)
 
 	if err != nil {
 		return nil, err
 	}
 
 	// Create a producer on the topic
+	topic := config.TopicName()
 	producer, err := client.CreateProducer(pulsar.ProducerOptions{
 		Topic: topic,
 	})
 
 	if err != nil {
-		return nil, err
+		client.Close()
+		return nil, fmt.Errorf("could not create producer on topic %q: %w", topic, err)
 	}
 
 	return &EventsClient{

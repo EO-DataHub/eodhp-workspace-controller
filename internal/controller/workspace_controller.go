@@ -302,9 +302,7 @@ func (r *WorkspaceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 type Config struct {
 	AWS    aws.AWSConfig `yaml:"aws"`
-	Pulsar struct {
-		URL string `yaml:"url"`
-	} `yaml:"pulsar"`
+	Pulsar PulsarConfig  `yaml:"pulsar"`
 }
 
 func (c *Config) Load(path string) error {
