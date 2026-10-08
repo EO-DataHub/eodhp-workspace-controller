@@ -123,6 +123,9 @@ controllerManager:
     - name: pulsar-token
       secret:
         secretName: workspace-controller-pulsar-token
+        items:
+          - key: TOKEN
+            path: token
   config:
     pulsar:
       url: pulsar://pulsar-proxy.pulsar:6650
