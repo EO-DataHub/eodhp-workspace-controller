@@ -8,7 +8,6 @@ import (
 	corev1alpha1 "github.com/EO-DataHub/eodhp-workspace-controller/api/v1alpha1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -85,7 +84,7 @@ func (r *StorageReconciler) ReconcilePersistentVolumes(
 			}
 			return nil
 		} else {
-			if errors.IsNotFound(err) {
+			if apierrors.IsNotFound(err) {
 				// PersistentVolume does not exist.
 			} else {
 				log.Error(err, "Failed to get PersistentVolume",
@@ -149,7 +148,7 @@ func (r *StorageReconciler) DeletePersistentVolumes(
 		if err := r.Get(ctx, client.ObjectKey{
 			Name:      pvSpec.Name,
 			Namespace: spec.Namespace}, pv); err != nil {
-			if errors.IsNotFound(err) {
+			if apierrors.IsNotFound(err) {
 				// PersistentVolumeClaim does not exist
 				continue
 			} else {
@@ -177,7 +176,7 @@ func (r *StorageReconciler) ReconcilePersistentVolumeClaims(
 			Namespace: spec.Namespace}, pvc); err == nil {
 			continue // PersistentVolumeClaim already exists.
 		} else {
-			if errors.IsNotFound(err) {
+			if apierrors.IsNotFound(err) {
 				// PersistentVolumeClaim does not exist.
 			} else {
 				log.Error(err, "Failed to get PersistentVolumeClaim",
@@ -218,7 +217,7 @@ func (r *StorageReconciler) DeletePersistentVolumeClaims(
 		if err := r.Get(ctx, client.ObjectKey{
 			Name:      pvcSpec.Name,
 			Namespace: spec.Namespace}, pvc); err != nil {
-			if errors.IsNotFound(err) {
+			if apierrors.IsNotFound(err) {
 				// PersistentVolumeClaim does not exist
 				continue
 			} else {
@@ -238,7 +237,7 @@ func (r *StorageReconciler) DeleteBlockStoreData(ctx context.Context, spec *core
 	jobNamespace := spec.Namespace
 	job := &batchv1.Job{}
 
-	err := r.Client.Get(ctx, client.ObjectKey{Name: jobName, Namespace: jobNamespace}, job)
+	err := r.Get(ctx, client.ObjectKey{Name: jobName, Namespace: jobNamespace}, job)
 	if err != nil && apierrors.IsNotFound(err) {
 		log.Info("delete-block-store Job not found, creating new one", "job", jobName, "namespace", jobNamespace)
 		newJob := &batchv1.Job{
@@ -271,7 +270,7 @@ func (r *StorageReconciler) DeleteBlockStoreData(ctx context.Context, spec *core
 				},
 			},
 		}
-		if err := r.Client.Create(ctx, newJob); err != nil {
+		if err := r.Create(ctx, newJob); err != nil {
 			log.Error(err, "Failed to create job", "job", jobName)
 			return fmt.Errorf("failed to create job delete-block-store: %w", err)
 		}
@@ -281,7 +280,7 @@ func (r *StorageReconciler) DeleteBlockStoreData(ctx context.Context, spec *core
 	// Poll until job completes or fails - 60 seconds timeout - we want to ensure the job completes
 	log.Info("Waiting for job to complete", "job", jobName)
 	for i := 0; i < 60; i++ {
-		err := r.Client.Get(ctx, client.ObjectKey{Name: jobName, Namespace: jobNamespace}, job)
+		err := r.Get(ctx, client.ObjectKey{Name: jobName, Namespace: jobNamespace}, job)
 		if err != nil {
 			log.Error(err, "Failed to get job status")
 			return fmt.Errorf("failed to get job: %w", err)
@@ -292,7 +291,7 @@ func (r *StorageReconciler) DeleteBlockStoreData(ctx context.Context, spec *core
 				return nil
 			}
 			if c.Type == batchv1.JobFailed && c.Status == corev1.ConditionTrue {
-				return fmt.Errorf("Job failed")
+				return fmt.Errorf("job failed")
 			}
 		}
 		time.Sleep(1 * time.Second)

@@ -124,7 +124,7 @@ func (r *WorkspaceReconciler) Reconcile(ctx context.Context,
 	}
 	sts := ws.Status.DeepCopy()
 
-	if ws.ObjectMeta.DeletionTimestamp.IsZero() {
+	if ws.DeletionTimestamp.IsZero() {
 		// Workspace is not being deleted, continue with reconciliation
 		if updated, err := r.ReconcileFinalizer(ctx, req); updated {
 			return ctrl.Result{Requeue: true}, nil

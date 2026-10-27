@@ -51,7 +51,7 @@ func (r *NamespaceReconciler) Teardown(ctx context.Context,
 	namespace := &corev1.Namespace{}
 	if err := r.Get(ctx, client.ObjectKey{Name: spec.Namespace},
 		namespace); err == nil {
-		if !namespace.ObjectMeta.DeletionTimestamp.IsZero() {
+		if !namespace.DeletionTimestamp.IsZero() {
 			// Already being deleted
 			return nil
 		}
