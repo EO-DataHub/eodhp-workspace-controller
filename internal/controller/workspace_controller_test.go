@@ -7,6 +7,7 @@ import (
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -17,12 +18,13 @@ import (
 var _ = Describe("Workspace Controller", func() {
 	Context("When reconciling a resource", func() {
 		const resourceName = "test-resource"
+		const finalizer = "core.telespazio-uk.io/workspace-finalizer"
 
 		ctx := context.Background()
 
 		typeNamespacedName := types.NamespacedName{
 			Name:      resourceName,
-			Namespace: "default", // TODO(user):Modify as needed
+			Namespace: "default",
 		}
 		workspace := &corev1alpha1.Workspace{}
 
@@ -35,36 +37,37 @@ var _ = Describe("Workspace Controller", func() {
 						Name:      resourceName,
 						Namespace: "default",
 					},
-					// TODO(user): Specify other spec details if needed.
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 			}
 		})
 
 		AfterEach(func() {
-			// TODO(user): Cleanup logic after each test, like removing the resource instance.
 			resource := &corev1alpha1.Workspace{}
 			err := k8sClient.Get(ctx, typeNamespacedName, resource)
 			Expect(err).NotTo(HaveOccurred())
 
+			By("Removing the finalizer so the resource can be deleted")
+			controllerutil.RemoveFinalizer(resource, finalizer)
+			Expect(k8sClient.Update(ctx, resource)).To(Succeed())
+
 			By("Cleanup the specific resource instance Workspace")
 			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
 		})
-		It("should successfully reconcile the resource", func() {
-			By("Reconciling the created resource")
-			controllerReconciler := &WorkspaceReconciler{
-				Client: Client{
-					Client: k8sClient,
-				},
-				Scheme: k8sClient.Scheme(),
-			}
 
-			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+		It("should add the finalizer on first reconcile", func() {
+			controllerReconciler := NewWorkspaceReconciler(Client{Client: k8sClient},
+				k8sClient.Scheme(), Config{}, nil)
+
+			result, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedName,
 			})
 			Expect(err).NotTo(HaveOccurred())
-			// TODO(user): Add more specific assertions depending on your controller's reconciliation logic.
-			// Example: If you expect a certain status condition after reconciliation, verify it here.
+			Expect(result.Requeue).To(BeTrue())
+
+			resource := &corev1alpha1.Workspace{}
+			Expect(k8sClient.Get(ctx, typeNamespacedName, resource)).To(Succeed())
+			Expect(controllerutil.ContainsFinalizer(resource, finalizer)).To(BeTrue())
 		})
 	})
 })
