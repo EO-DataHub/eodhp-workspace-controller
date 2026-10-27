@@ -2,7 +2,7 @@ module github.com/EO-DataHub/eodhp-workspace-controller
 
 go 1.23.0
 
-toolchain go1.24.1
+toolchain go1.26.10
 
 require (
 	github.com/apache/pulsar-client-go v0.14.0
